@@ -158,12 +158,31 @@ function textBlock(item, placeholders, values) {
     }
     return box;
 }
-function ringBlock(item, values, config, theme, heatmap) {
+function formatRemainingTime(resetAt, now, template) {
+    if (!(Number(resetAt) > 0))
+        return '—';
+    const total = Math.max(0, Math.floor((resetAt - now.getTime()) / 1000));
+    const h = Math.floor(total / 3600), m = Math.floor(total % 3600 / 60), s = total % 60;
+    const compact = h > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${m}m${String(s).padStart(2, '0')}`;
+    return (template || '{compact}')
+        .replaceAll('{h}', String(h))
+        .replaceAll('{hh}', String(h).padStart(2, '0'))
+        .replaceAll('{m}', String(m))
+        .replaceAll('{mm}', String(m).padStart(2, '0'))
+        .replaceAll('{s}', String(s))
+        .replaceAll('{ss}', String(s).padStart(2, '0'))
+        .replaceAll('{compact}', compact);
+}
+function ringBlock(item, values, config, theme, heatmap, now) {
     if (!item.center?.enabled)
         return new BlockArea(item, values, config, theme, heatmap);
     const overlay = new St.Widget({layout_manager: new Clutter.BinLayout(), width: item.size, height: item.size});
     overlay.add_child(new BlockArea(item, values, config, theme, heatmap));
-    const value = String(valueFor(values, item.center.vendor, item.center.source, item.center.mode));
+    const isTime = item.center.source.endsWith('_reset');
+    const resetAt = isTime ? values.get(item.center.vendor, `${item.center.source}_at`) : 0;
+    const value = isTime
+        ? formatRemainingTime(resetAt, now, item.center.timeFormat)
+        : String(valueFor(values, item.center.vendor, item.center.source, item.center.mode));
     const text = item.center.template ? item.center.template.replace('{value}', value) : value;
     const label = new St.Label({text,
         x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER});
@@ -198,7 +217,7 @@ export function makePanelVisual(adapter, snapshot, now, config, theme, heatmap =
     const items = config.customEnabled ? config.items : legacyItems(config);
     for (const item of items) {
         if (item.type === 'text') box.add_child(textBlock(item, active.placeholders, values));
-        else if (item.type === 'ring') box.add_child(ringBlock(item, values, config, theme, calendar));
+        else if (item.type === 'ring') box.add_child(ringBlock(item, values, config, theme, calendar, now));
         else if (item.type === 'timer') box.add_child(timerBlock(item, values, now));
         else box.add_child(new BlockArea(item, values, config, theme, calendar));
     }
@@ -214,7 +233,8 @@ function legacyItems(config) {
             layers: [layer('session'), layer('weekly')]}];
     return [
         {id: 'quota', type: 'ring', size: 24, layerGap: .5,
-            center: {enabled: true, vendor: 'active', source: config.centerQuota === 'weekly' ? 'weekly' : 'session', mode: 'remaining', fontSize: 8},
+            center: {enabled: true, vendor: 'active', source: config.centerQuota === 'weekly' ? 'weekly' : 'session',
+                mode: 'remaining', fontSize: 8, template: '', timeFormat: '{compact}'},
             layers: [layer('session'), layer('weekly')]},
         ...(config.showResetRings ? [{id: 'reset', type: 'ring', size: 24, layerGap: .5, center: {enabled: false},
             layers: [layer('session_reset', 'remaining', false), layer('weekly_reset', 'remaining', false)]}] : []),

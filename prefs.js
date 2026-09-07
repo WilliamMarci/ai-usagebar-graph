@@ -312,6 +312,8 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
             row.add_row(this._modeCombo(_('Center mode'), item.center.mode, v => { item.center.mode = v; save(); }));
             row.add_row(this._valueEntry(_('Center custom text ({value}; empty = number)'), item.center.template,
                 v => { item.center.template = v; save(); }));
+            row.add_row(this._valueEntry(_('Center time format ({h} {mm} {ss} {compact})'), item.center.timeFormat,
+                v => { item.center.timeFormat = v; save(); }));
             row.add_row(this._valueSpin(_('Center font size'), item.center.fontSize, 6, 16, v => { item.center.fontSize = v; save(); }));
         }
         item.layers.forEach((layer, layerIndex) => {
