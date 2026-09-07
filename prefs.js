@@ -35,13 +35,7 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
 
         window.add(this._buildGeneralPage(settings, cleanups));
         window.add(this._buildIndicatorPage(settings, cleanups));
-        window.add(this._buildAnthropicPage(settings));
-        window.add(this._buildOpenAiPage(settings));
-        window.add(this._buildZaiPage(settings));
-        window.add(this._buildOpenRouterPage(settings));
-        window.add(this._buildDeepSeekPage(settings));
-        window.add(this._buildKimiPage(settings));
-        window.add(this._buildOpenCodePage(settings));
+        window.add(this._buildProvidersPage(settings));
 
         window.connect('close-request', () => {
             for (const disconnect of cleanups)
@@ -456,44 +450,39 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
             settings.reset(key);
     }
 
-    _buildAnthropicPage(settings) {
-        // Translators: "Anthropic" is a brand name — usually keep untranslated.
-        const page = new Adw.PreferencesPage({
-            title: _('Anthropic'),
-            icon_name: 'ai-symbolic',
-        });
+    _buildProvidersPage(settings) {
+        const page = new Adw.PreferencesPage({title: _('Providers'), icon_name: 'ai-symbolic'});
+        page.add(this._buildAnthropicGroup(settings));
+        page.add(this._buildOpenAiGroup(settings));
+        page.add(this._buildZaiGroup(settings));
+        page.add(this._buildOpenRouterGroup(settings));
+        page.add(this._buildDeepSeekGroup(settings));
+        page.add(this._buildKimiGroup(settings));
+        page.add(this._buildOpenCodeGroup(settings));
+        return page;
+    }
+
+    _buildAnthropicGroup(settings) {
         const group = new Adw.PreferencesGroup({
             title: _('Anthropic'),
             description: _('Credentials path — empty uses ~/.claude/.credentials.json.'),
         });
         group.add(this._switchRow(settings, 'anthropic-enabled', _('Enabled')));
         group.add(this._entryRow(settings, 'anthropic-credentials-path', _('Credentials path')));
-        page.add(group);
-        return page;
+        return group;
     }
 
-    _buildOpenAiPage(settings) {
-        // Translators: "OpenAI" is a brand name — usually keep untranslated.
-        const page = new Adw.PreferencesPage({
-            title: _('OpenAI'),
-            icon_name: 'ai-symbolic',
-        });
+    _buildOpenAiGroup(settings) {
         const group = new Adw.PreferencesGroup({
             title: _('OpenAI'),
             description: _('Codex auth path — empty uses ~/.codex/auth.json.'),
         });
         group.add(this._switchRow(settings, 'openai-enabled', _('Enabled')));
         group.add(this._entryRow(settings, 'openai-codex-auth-path', _('Codex auth path')));
-        page.add(group);
-        return page;
+        return group;
     }
 
-    _buildZaiPage(settings) {
-        // Translators: "Z.AI" is a brand name — usually keep untranslated.
-        const page = new Adw.PreferencesPage({
-            title: _('Z.AI'),
-            icon_name: 'ai-symbolic',
-        });
+    _buildZaiGroup(settings) {
         const group = new Adw.PreferencesGroup({
             title: _('Z.AI'),
             description: _('Set the API key inline or via the environment variable (env wins).'),
@@ -502,16 +491,10 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         group.add(this._entryRow(settings, 'zai-api-key-env', _('API key env var')));
         group.add(this._passwordRow(settings, 'zai-api-key', _('API key (inline)')));
         group.add(this._entryRow(settings, 'zai-plan-tier', _('Plan tier (lite/pro/max)')));
-        page.add(group);
-        return page;
+        return group;
     }
 
-    _buildOpenRouterPage(settings) {
-        // Translators: "OpenRouter" is a brand name — usually keep untranslated.
-        const page = new Adw.PreferencesPage({
-            title: _('OpenRouter'),
-            icon_name: 'ai-symbolic',
-        });
+    _buildOpenRouterGroup(settings) {
         const group = new Adw.PreferencesGroup({
             title: _('OpenRouter'),
             description: _('Set the API key inline or via the environment variable (env wins).'),
@@ -519,16 +502,10 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         group.add(this._switchRow(settings, 'openrouter-enabled', _('Enabled')));
         group.add(this._entryRow(settings, 'openrouter-api-key-env', _('API key env var')));
         group.add(this._passwordRow(settings, 'openrouter-api-key', _('API key (inline)')));
-        page.add(group);
-        return page;
+        return group;
     }
 
-    _buildDeepSeekPage(settings) {
-        // Translators: "DeepSeek" is a brand name — usually keep untranslated.
-        const page = new Adw.PreferencesPage({
-            title: _('DeepSeek'),
-            icon_name: 'ai-symbolic',
-        });
+    _buildDeepSeekGroup(settings) {
         const group = new Adw.PreferencesGroup({
             title: _('DeepSeek'),
             description: _('Disabled by default; requires an API key (env var or inline).'),
@@ -536,16 +513,10 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         group.add(this._switchRow(settings, 'deepseek-enabled', _('Enabled')));
         group.add(this._entryRow(settings, 'deepseek-api-key-env', _('API key env var')));
         group.add(this._passwordRow(settings, 'deepseek-api-key', _('API key (inline)')));
-        page.add(group);
-        return page;
+        return group;
     }
 
-    _buildKimiPage(settings) {
-        // Translators: "Kimi" is a brand name — usually keep untranslated.
-        const page = new Adw.PreferencesPage({
-            title: _('Kimi'),
-            icon_name: 'ai-symbolic',
-        });
+    _buildKimiGroup(settings) {
         const group = new Adw.PreferencesGroup({
             title: _('Kimi'),
             description: _('Disabled by default; requires an API key (env var or inline).'),
@@ -553,12 +524,10 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         group.add(this._switchRow(settings, 'kimi-enabled', _('Enabled')));
         group.add(this._entryRow(settings, 'kimi-api-key-env', _('API key env var')));
         group.add(this._passwordRow(settings, 'kimi-api-key', _('API key (inline)')));
-        page.add(group);
-        return page;
+        return group;
     }
 
-    _buildOpenCodePage(settings) {
-        const page = new Adw.PreferencesPage({title: _('OpenCode'), icon_name: 'ai-symbolic'});
+    _buildOpenCodeGroup(settings) {
         const group = new Adw.PreferencesGroup({
             title: _('OpenCode Go'),
             description: _('Reads rolling, weekly, and monthly quota from the OpenCode Go usage endpoint.'),
@@ -567,8 +536,7 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         group.add(this._entryRow(settings, 'opencode-base-url', _('API base URL')));
         group.add(this._entryRow(settings, 'opencode-api-key-env', _('API key env var')));
         group.add(this._passwordRow(settings, 'opencode-api-key', _('API key (inline)')));
-        page.add(group);
-        return page;
+        return group;
     }
 
     _switchRow(settings, key, title) {
