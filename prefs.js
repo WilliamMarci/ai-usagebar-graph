@@ -39,6 +39,7 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         window.add(this._buildOpenRouterPage(settings));
         window.add(this._buildDeepSeekPage(settings));
         window.add(this._buildKimiPage(settings));
+        window.add(this._buildOpenCodePage(settings));
 
         window.connect('close-request', () => {
             for (const disconnect of cleanups)
@@ -81,6 +82,25 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
             settings.disconnect(comboResyncId);
         });
         displayGroup.add(combo);
+        const displayModes = new Gtk.StringList();
+        [_('Number'), _('Two bars'), _('Quota rings'), _('Usage heatmap')].forEach(x => displayModes.append(x));
+        const displayMode = new Adw.ComboRow({title: _('Panel display mode'), model: displayModes});
+        this._bindEnumCombo(settings, 'display-mode', displayMode, cleanups);
+        displayGroup.add(displayMode);
+
+        const orientations = new Gtk.StringList();
+        [_('Horizontal'), _('Vertical')].forEach(x => orientations.append(x));
+        const orientation = new Adw.ComboRow({title: _('Bar orientation'), model: orientations});
+        this._bindEnumCombo(settings, 'visual-bar-orientation', orientation, cleanups);
+        displayGroup.add(orientation);
+        displayGroup.add(this._switchRow(settings, 'visual-show-labels', _('Show 5h / 1w labels')));
+        const centers = new Gtk.StringList();
+        [_('5h remaining'), _('1w remaining')].forEach(x => centers.append(x));
+        const center = new Adw.ComboRow({title: _('Ring center text'), model: centers});
+        center.selected = settings.get_string('visual-center-quota') === 'weekly' ? 1 : 0;
+        center.connect('notify::selected', () => settings.set_string('visual-center-quota', center.selected === 1 ? 'weekly' : 'session'));
+        displayGroup.add(center);
+        displayGroup.add(this._switchRow(settings, 'visual-show-reset-rings', _('Show reset countdown rings')));
         page.add(displayGroup);
 
         const cadenceGroup = new Adw.PreferencesGroup({
@@ -148,6 +168,8 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         colorGroup.add(this._colorRow(settings, 'color-mid', _('Mid'), theme[COLOR_KEY_PALETTE['color-mid']], cleanups));
         colorGroup.add(this._colorRow(settings, 'color-high', _('High'), theme[COLOR_KEY_PALETTE['color-high']], cleanups));
         colorGroup.add(this._colorRow(settings, 'color-critical', _('Critical'), theme[COLOR_KEY_PALETTE['color-critical']], cleanups));
+        colorGroup.add(this._colorRow(settings, 'visual-track-color', _('Visualization track'), '#5e5c64', cleanups));
+        colorGroup.add(this._colorRow(settings, 'heatmap-color', _('Heatmap theme'), '#2ec27e', cleanups));
         page.add(colorGroup);
 
         const notifyGroup = new Adw.PreferencesGroup({
@@ -341,10 +363,38 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         return page;
     }
 
+    _buildOpenCodePage(settings) {
+        const page = new Adw.PreferencesPage({title: _('OpenCode'), icon_name: 'ai-symbolic'});
+        const group = new Adw.PreferencesGroup({
+            title: _('OpenCode Go'),
+            description: _('Reads rolling, weekly, and monthly quota from the OpenCode Go usage endpoint.'),
+        });
+        group.add(this._switchRow(settings, 'opencode-enabled', _('Enabled')));
+        group.add(this._entryRow(settings, 'opencode-base-url', _('API base URL')));
+        group.add(this._entryRow(settings, 'opencode-api-key-env', _('API key env var')));
+        group.add(this._passwordRow(settings, 'opencode-api-key', _('API key (inline)')));
+        page.add(group);
+        return page;
+    }
+
     _switchRow(settings, key, title) {
         const row = new Adw.SwitchRow({title});
         settings.bind(key, row, 'active', Gio.SettingsBindFlags.DEFAULT);
         return row;
+    }
+
+    _bindEnumCombo(settings, key, row, cleanups) {
+        row.selected = settings.get_enum(key);
+        const notify = row.connect('notify::selected', () => {
+            if (settings.get_enum(key) !== row.selected)
+                settings.set_enum(key, row.selected);
+        });
+        const changed = settings.connect(`changed::${key}`, () => {
+            const value = settings.get_enum(key);
+            if (row.selected !== value)
+                row.selected = value;
+        });
+        cleanups.push(() => { row.disconnect(notify); settings.disconnect(changed); });
     }
 
     _entryRow(settings, key, title) {

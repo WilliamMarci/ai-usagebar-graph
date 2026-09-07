@@ -22,6 +22,8 @@ import {evaluateNotification, notificationText} from '../lib/notify.js';
 import {severityColor, Severity} from '../lib/severity.js';
 import {defaultTheme, withOverrides} from '../lib/theme.js';
 import {parseFakePct, FAKE_PCT_ENV} from '../lib/debug.js';
+import {makePanelVisual} from './panelVisual.js';
+import {loadContributionGraph} from '../lib/tokscale.js';
 
 const RERENDER_INTERVAL_S = 60;
 const STALE_MARK = ' ⏸';
@@ -74,6 +76,8 @@ class Indicator extends PanelMenu.Button {
         this._fetchedAt = new Map();    // vendorId -> Date
         this._vendorItems = new Map();  // vendorId -> PopupMenu.PopupSubMenuMenuItem
         this._enabledSig = '';
+        this._heatmap = [];
+        this._visual = null;
 
         this._box = new St.BoxLayout({style_class: 'panel-status-menu-box'});
         this._tag = new St.Label({
@@ -137,6 +141,7 @@ class Indicator extends PanelMenu.Button {
         // One immediate refresh, then poll. A rejected promise must never escape
         // into the timeout callback / event loop.
         this._refresh().catch(e => console.warn(`ai-usagebar: refresh failed: ${e}`));
+        this._refreshHeatmap();
         this._rearmPollTimer(this._config.refreshIntervalSecs);
     }
 
@@ -463,6 +468,20 @@ class Indicator extends PanelMenu.Button {
     }
 
     _paintLabelOk(snapshot, stale, now) {
+        if (this._config.display.mode !== 'number') {
+            this._label.hide();
+            if (this._visual)
+                this._visual.destroy();
+            this._visual = makePanelVisual(
+                this._adapter, snapshot, now, this._config.display, this._theme, this._heatmap);
+            this._box.add_child(this._visual);
+            return;
+        }
+        if (this._visual) {
+            this._visual.destroy();
+            this._visual = null;
+        }
+        this._label.show();
         let text = substitute(this._barFormat, this._adapter.placeholders(snapshot, now));
         if (stale)
             text += STALE_MARK;
@@ -509,6 +528,11 @@ class Indicator extends PanelMenu.Button {
     }
 
     _setLabel(text, color) {
+        if (this._visual) {
+            this._visual.destroy();
+            this._visual = null;
+        }
+        this._label.show();
         this._label.text = text;
         this._label.set_style(`color: ${color};`);
     }
@@ -522,6 +546,15 @@ class Indicator extends PanelMenu.Button {
 
     _setVendorTag(id) {
         this._tag.text = vendorTag(id);
+    }
+
+    async _refreshHeatmap() {
+        const values = await loadContributionGraph(this._cancellable);
+        if (this._destroyed)
+            return;
+        this._heatmap = values;
+        if (this._config.display.mode === 'heatmap')
+            this._reRenderFromCache();
     }
 
     _makeActionButton(iconName, label, onClick) {

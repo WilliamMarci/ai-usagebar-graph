@@ -7,6 +7,21 @@
     margin-right: 6px;
 }
 
+.aiusagebar-panel-visual {
+    spacing: 4px;
+}
+
+.aiusagebar-visual-label {
+    font-size: 7px;
+    line-height: 8px;
+    opacity: 0.72;
+}
+
+.aiusagebar-ring-text {
+    font-size: 8px;
+    font-weight: bold;
+}
+
 .aiusagebar-popup {
     min-width: 320px;
 }

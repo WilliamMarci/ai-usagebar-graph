@@ -7,6 +7,19 @@
     <value nick="openrouter" value="3"/>
     <value nick="deepseek" value="4"/>
     <value nick="kimi" value="5"/>
+    <value nick="opencode" value="6"/>
+  </enum>
+
+  <enum id="org.gnome.shell.extensions.ai-usagebar.display-mode">
+    <value nick="number" value="0"/>
+    <value nick="bars" value="1"/>
+    <value nick="rings" value="2"/>
+    <value nick="heatmap" value="3"/>
+  </enum>
+
+  <enum id="org.gnome.shell.extensions.ai-usagebar.bar-orientation">
+    <value nick="horizontal" value="0"/>
+    <value nick="vertical" value="1"/>
   </enum>
 
   <schema id="org.gnome.shell.extensions.ai-usagebar"
@@ -35,6 +48,41 @@
       <default>'{session_pct}% · {session_reset}'</default>
       <summary>Panel label format template</summary>
       <description>Template for the top-panel label. Supports {placeholder} substitution from the active vendor's value set.</description>
+    </key>
+
+    <key name="display-mode" enum="org.gnome.shell.extensions.ai-usagebar.display-mode">
+      <default>'number'</default>
+      <summary>Panel visualization mode</summary>
+    </key>
+
+    <key name="visual-bar-orientation" enum="org.gnome.shell.extensions.ai-usagebar.bar-orientation">
+      <default>'horizontal'</default>
+      <summary>Orientation of the two quota bars</summary>
+    </key>
+
+    <key name="visual-show-labels" type="b">
+      <default>true</default>
+      <summary>Show compact 5h and 1w labels</summary>
+    </key>
+
+    <key name="visual-center-quota" type="s">
+      <default>'session'</default>
+      <summary>Quota shown as text in the center of quota rings</summary>
+    </key>
+
+    <key name="visual-show-reset-rings" type="b">
+      <default>true</default>
+      <summary>Show a second pair of rings for time remaining until reset</summary>
+    </key>
+
+    <key name="visual-track-color" type="s">
+      <default>''</default>
+      <summary>Track color override for panel visualizations</summary>
+    </key>
+
+    <key name="heatmap-color" type="s">
+      <default>''</default>
+      <summary>Theme color used by the usage heatmap</summary>
     </key>
 
     <key name="tooltip-format" type="s">
@@ -192,6 +240,26 @@
       <default>''</default>
       <summary>Kimi inline API key</summary>
       <description>Inline Kimi API key used when the environment variable is unset. Empty means none.</description>
+    </key>
+
+    <key name="opencode-enabled" type="b">
+      <default>false</default>
+      <summary>Enable OpenCode Go</summary>
+    </key>
+
+    <key name="opencode-api-key-env" type="s">
+      <default>'OPENCODE_API_KEY'</default>
+      <summary>OpenCode API key environment variable</summary>
+    </key>
+
+    <key name="opencode-api-key" type="s">
+      <default>''</default>
+      <summary>OpenCode inline API key</summary>
+    </key>
+
+    <key name="opencode-base-url" type="s">
+      <default>'https://opencode.ai'</default>
+      <summary>OpenCode API base URL</summary>
     </key>
 
   </schema>
