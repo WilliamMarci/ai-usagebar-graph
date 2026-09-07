@@ -4,11 +4,16 @@
 
 .aiusagebar-panel-tag {
     font-weight: bold;
-    margin-right: 6px;
+    margin-right: 2px;
+}
+
+.panel-button.aiusagebar-compact {
+    -natural-hpadding: 3px;
+    -minimum-hpadding: 1px;
 }
 
 .aiusagebar-panel-visual {
-    spacing: 4px;
+    spacing: 2px;
 }
 
 .aiusagebar-visual-label {
@@ -20,6 +25,10 @@
 .aiusagebar-ring-text {
     font-size: 8px;
     font-weight: bold;
+}
+
+.aiusagebar-text-stack {
+    spacing: 0;
 }
 
 .aiusagebar-popup {

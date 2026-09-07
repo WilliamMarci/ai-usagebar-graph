@@ -9,6 +9,7 @@ import {rgbToHex} from './lib/color.js';
 import {vformat} from './lib/format.js';
 import {defaultTheme} from './lib/theme.js';
 import {VENDOR_LABELS} from './lib/vendors.js';
+import {parseIndicatorLayout, serializeIndicatorLayout, newItem, SOURCES} from './lib/indicator-layout.js';
 
 const INTERVAL_MIN = 300;
 const INTERVAL_MAX = 86400;
@@ -33,6 +34,7 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         this._loadStyles();
 
         window.add(this._buildGeneralPage(settings, cleanups));
+        window.add(this._buildIndicatorPage(settings, cleanups));
         window.add(this._buildAnthropicPage(settings));
         window.add(this._buildOpenAiPage(settings));
         window.add(this._buildZaiPage(settings));
@@ -82,25 +84,6 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
             settings.disconnect(comboResyncId);
         });
         displayGroup.add(combo);
-        const displayModes = new Gtk.StringList();
-        [_('Number'), _('Two bars'), _('Quota rings'), _('Usage heatmap')].forEach(x => displayModes.append(x));
-        const displayMode = new Adw.ComboRow({title: _('Panel display mode'), model: displayModes});
-        this._bindEnumCombo(settings, 'display-mode', displayMode, cleanups);
-        displayGroup.add(displayMode);
-
-        const orientations = new Gtk.StringList();
-        [_('Horizontal'), _('Vertical')].forEach(x => orientations.append(x));
-        const orientation = new Adw.ComboRow({title: _('Bar orientation'), model: orientations});
-        this._bindEnumCombo(settings, 'visual-bar-orientation', orientation, cleanups);
-        displayGroup.add(orientation);
-        displayGroup.add(this._switchRow(settings, 'visual-show-labels', _('Show 5h / 1w labels')));
-        const centers = new Gtk.StringList();
-        [_('5h remaining'), _('1w remaining')].forEach(x => centers.append(x));
-        const center = new Adw.ComboRow({title: _('Ring center text'), model: centers});
-        center.selected = settings.get_string('visual-center-quota') === 'weekly' ? 1 : 0;
-        center.connect('notify::selected', () => settings.set_string('visual-center-quota', center.selected === 1 ? 'weekly' : 'session'));
-        displayGroup.add(center);
-        displayGroup.add(this._switchRow(settings, 'visual-show-reset-rings', _('Show reset countdown rings')));
         page.add(displayGroup);
 
         const cadenceGroup = new Adw.PreferencesGroup({
@@ -168,8 +151,6 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         colorGroup.add(this._colorRow(settings, 'color-mid', _('Mid'), theme[COLOR_KEY_PALETTE['color-mid']], cleanups));
         colorGroup.add(this._colorRow(settings, 'color-high', _('High'), theme[COLOR_KEY_PALETTE['color-high']], cleanups));
         colorGroup.add(this._colorRow(settings, 'color-critical', _('Critical'), theme[COLOR_KEY_PALETTE['color-critical']], cleanups));
-        colorGroup.add(this._colorRow(settings, 'visual-track-color', _('Visualization track'), '#5e5c64', cleanups));
-        colorGroup.add(this._colorRow(settings, 'heatmap-color', _('Heatmap theme'), '#2ec27e', cleanups));
         page.add(colorGroup);
 
         const notifyGroup = new Adw.PreferencesGroup({
@@ -219,6 +200,149 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         page.add(resetGroup);
 
         return page;
+    }
+
+    _buildIndicatorPage(settings, cleanups) {
+        const page = new Adw.PreferencesPage({title: _('Indicator'), icon_name: 'view-grid-symbolic'});
+        const general = new Adw.PreferencesGroup({title: _('Panel indicator')});
+        general.add(this._switchRow(settings, 'indicator-custom-enabled', _('Use custom graphical layout')));
+        const boxes = new Gtk.StringList(); [_('Left box'), _('Center box'), _('Right box')].forEach(x => boxes.append(x));
+        const box = new Adw.ComboRow({title: _('Panel box'), model: boxes});
+        const boxIds = ['left', 'center', 'right']; box.selected = Math.max(0, boxIds.indexOf(settings.get_string('indicator-panel-box')));
+        box.connect('notify::selected', () => settings.set_string('indicator-panel-box', boxIds[box.selected]));
+        general.add(box);
+        general.add(this._spinSettingRow(settings, 'indicator-panel-position', _('Position inside box'), 0, 99));
+        const enabled = this._switchRow(settings, 'indicator-label-enabled', _('Show leading label'));
+        general.add(enabled);
+        general.add(this._entryRow(settings, 'indicator-label-text', _('Leading label template')));
+        general.add(this._spinSettingRow(settings, 'indicator-label-font-size', _('Leading label font size'), 6, 28));
+        general.add(this._colorRow(settings, 'visual-track-color', _('Track color'), '#5e5c64', cleanups));
+        general.add(this._colorRow(settings, 'heatmap-color', _('Heatmap color'), '#2ec27e', cleanups));
+        page.add(general);
+
+        const layout = new Adw.PreferencesGroup({
+            title: _('Ordered blocks'),
+            description: _('Build the panel from any number of rings, bars, text blocks, and heatmaps. Changes redraw only when settings or quota data change.'),
+        });
+        page.add(layout);
+        this._rebuildLayoutEditor(settings, layout);
+        return page;
+    }
+
+    _rebuildLayoutEditor(settings, group) {
+        for (const row of group._aiRows ?? [])
+            group.remove(row);
+        group._aiRows = [];
+        const items = parseIndicatorLayout(settings.get_string('indicator-items-json'));
+        const save = () => settings.set_string('indicator-items-json', serializeIndicatorLayout(items));
+        const structural = () => { save(); this._rebuildLayoutEditor(settings, group); };
+
+        items.forEach((item, index) => {
+            const row = new Adw.ExpanderRow({title: `${index + 1}. ${this._itemTitle(item.type)}`});
+            row.add_suffix(this._smallButton('go-up-symbolic', _('Move up'), () => {
+                if (index > 0) { [items[index - 1], items[index]] = [items[index], items[index - 1]]; structural(); }
+            }));
+            row.add_suffix(this._smallButton('go-down-symbolic', _('Move down'), () => {
+                if (index + 1 < items.length) { [items[index + 1], items[index]] = [items[index], items[index + 1]]; structural(); }
+            }));
+            row.add_suffix(this._smallButton('user-trash-symbolic', _('Remove'), () => { items.splice(index, 1); structural(); }));
+            this._populateItemEditor(row, item, save, structural);
+            group.add(row); group._aiRows.push(row);
+        });
+
+        for (const [type, title] of [['ring', _('Add ring')], ['bar', _('Add bar')], ['text', _('Add text')], ['heatmap', _('Add heatmap')]]) {
+            const row = new Adw.ButtonRow({title, start_icon_name: 'list-add-symbolic'});
+            row.connect('activated', () => { items.push(newItem(type)); structural(); });
+            group.add(row); group._aiRows.push(row);
+        }
+    }
+
+    _populateItemEditor(row, item, save, structural) {
+        if (item.type === 'text') {
+            row.add_row(this._valueEntry(_('Top line template'), item.template, v => { item.template = v; save(); }));
+            row.add_row(this._valueSpin(_('Top line font size'), item.fontSize, 6, 24, v => { item.fontSize = v; save(); }));
+            row.add_row(this._valueEntry(_('Bottom line template (empty = hidden)'), item.secondaryTemplate, v => { item.secondaryTemplate = v; save(); }));
+            row.add_row(this._valueSpin(_('Bottom line font size'), item.secondaryFontSize, 6, 24, v => { item.secondaryFontSize = v; save(); }));
+            row.add_row(this._valueEntry(_('Color (hex, empty = theme)'), item.color, v => { item.color = v; save(); }));
+            return;
+        }
+        if (item.type === 'heatmap') {
+            row.add_row(this._valueSpin(_('Width'), item.width, 18, 120, v => { item.width = v; save(); }));
+            return;
+        }
+        row.add_row(this._valueSpin(item.type === 'ring' ? _('Diameter') : _('Height'), item.size, 16, 40, v => { item.size = v; save(); }));
+        if (item.type === 'bar') {
+            row.add_row(this._valueCombo(_('Orientation'), [_('Horizontal'), _('Vertical')], item.orientation === 'vertical' ? 1 : 0,
+                v => { item.orientation = v === 1 ? 'vertical' : 'horizontal'; save(); }));
+            row.add_row(this._valueSpin(_('Length'), item.length, 16, 72, v => { item.length = v; save(); }));
+        } else {
+            const center = new Adw.SwitchRow({title: _('Center text'), active: item.center.enabled});
+            center.connect('notify::active', () => { item.center.enabled = center.active; save(); }); row.add_row(center);
+            row.add_row(this._sourceCombo(_('Center content'), item.center.source, v => { item.center.source = v; save(); }));
+            row.add_row(this._modeCombo(_('Center mode'), item.center.mode, v => { item.center.mode = v; save(); }));
+            row.add_row(this._valueSpin(_('Center font size'), item.center.fontSize, 6, 16, v => { item.center.fontSize = v; save(); }));
+        }
+        item.layers.forEach((layer, layerIndex) => {
+            const lr = new Adw.ExpanderRow({title: `${_('Layer')} ${layerIndex + 1}`});
+            lr.add_suffix(this._smallButton('go-up-symbolic', _('Move layer up'), () => {
+                if (layerIndex > 0) { [item.layers[layerIndex - 1], item.layers[layerIndex]] = [item.layers[layerIndex], item.layers[layerIndex - 1]]; structural(); }
+            }));
+            lr.add_suffix(this._smallButton('user-trash-symbolic', _('Remove layer'), () => { item.layers.splice(layerIndex, 1); structural(); }));
+            lr.add_row(this._sourceCombo(_('Content'), layer.source, v => { layer.source = v; save(); }));
+            lr.add_row(this._modeCombo(_('Mode'), layer.mode, v => { layer.mode = v; save(); }));
+            const tiered = new Adw.SwitchRow({title: _('Use severity color tiers'), active: layer.tiered});
+            tiered.connect('notify::active', () => { layer.tiered = tiered.active; save(); }); lr.add_row(tiered);
+            lr.add_row(this._valueEntry(_('Fixed color (hex)'), layer.color, v => { layer.color = v; save(); }));
+            layer.tierColors ??= {low: '', mid: '', high: '', critical: ''};
+            for (const [key, title] of [['low', _('Low tier color')], ['mid', _('Mid tier color')],
+                ['high', _('High tier color')], ['critical', _('Critical tier color')]])
+                lr.add_row(this._valueEntry(`${title} (${_('empty = global')})`, layer.tierColors[key], v => { layer.tierColors[key] = v; save(); }));
+            lr.add_row(this._valueSpin(_('Thickness'), layer.thickness, 1, 6, v => { layer.thickness = v; save(); }));
+            row.add_row(lr);
+        });
+        const add = new Adw.ButtonRow({title: _('Add layer'), start_icon_name: 'list-add-symbolic'});
+        add.connect('activated', () => { item.layers.push({source: 'session', mode: 'remaining', color: '#2ec27e', tiered: true,
+            tierColors: {low: '', mid: '', high: '', critical: ''}, thickness: 2}); structural(); });
+        row.add_row(add);
+    }
+
+    _itemTitle(type) { return ({ring: _('Ring'), bar: _('Bar'), text: _('Text'), heatmap: _('Heatmap')})[type] ?? type; }
+    _smallButton(icon, tooltip, callback) {
+        const button = new Gtk.Button({icon_name: icon, tooltip_text: tooltip, valign: Gtk.Align.CENTER, css_classes: ['flat']});
+        button.connect('clicked', callback); return button;
+    }
+    _valueEntry(title, value, callback) {
+        const row = new Adw.EntryRow({title, text: String(value ?? '')}); row.connect('changed', () => callback(row.text)); return row;
+    }
+    _valueSpin(title, value, lower, upper, callback) {
+        const row = new Adw.SpinRow({title, adjustment: new Gtk.Adjustment({lower, upper, step_increment: 1}), digits: 0});
+        row.value = value; row.connect('notify::value', () => callback(Math.round(row.value))); return row;
+    }
+    _valueCombo(title, labels, selected, callback) {
+        const model = new Gtk.StringList(); labels.forEach(x => model.append(x));
+        const row = new Adw.ComboRow({title, model, selected}); row.connect('notify::selected', () => callback(row.selected)); return row;
+    }
+    _sourceCombo(title, selected, callback) {
+        const labels = ['5h quota', '1w quota', 'Monthly quota', '5h reset', '1w reset', 'Monthly reset', 'Peak quota'];
+        return this._valueCombo(title, labels, Math.max(0, SOURCES.indexOf(selected)), i => callback(SOURCES[i]));
+    }
+    _modeCombo(title, selected, callback) {
+        return this._valueCombo(title, [_('Remaining'), _('Used')], selected === 'used' ? 1 : 0, i => callback(i === 1 ? 'used' : 'remaining'));
+    }
+    _spinSettingRow(settings, key, title, lower, upper) {
+        const row = new Adw.SpinRow({title, adjustment: new Gtk.Adjustment({lower, upper, step_increment: 1}), digits: 0});
+        row.value = settings.get_int(key);
+        row.connect('notify::value', () => {
+            const value = Math.round(row.value);
+            if (settings.get_int(key) !== value)
+                settings.set_int(key, value);
+        });
+        settings.connect(`changed::${key}`, () => {
+            const value = settings.get_int(key);
+            if (Math.round(row.value) !== value)
+                row.value = value;
+        });
+        return row;
     }
 
     _registerIconPath() {

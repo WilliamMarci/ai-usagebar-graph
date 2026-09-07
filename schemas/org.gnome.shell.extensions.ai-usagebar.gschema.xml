@@ -50,6 +50,43 @@
       <description>Template for the top-panel label. Supports {placeholder} substitution from the active vendor's value set.</description>
     </key>
 
+    <key name="indicator-label-enabled" type="b">
+      <default>true</default>
+      <summary>Show the leading indicator label</summary>
+    </key>
+
+    <key name="indicator-custom-enabled" type="b">
+      <default>false</default>
+      <summary>Use the custom graphical indicator layout</summary>
+    </key>
+
+    <key name="indicator-panel-box" type="s">
+      <default>'right'</default>
+      <summary>Panel box containing the indicator</summary>
+    </key>
+
+    <key name="indicator-panel-position" type="i">
+      <default>0</default>
+      <range min="0" max="99"/>
+      <summary>Indicator order inside its panel box</summary>
+    </key>
+
+    <key name="indicator-label-text" type="s">
+      <default>'{vendor_short}'</default>
+      <summary>Template used by the leading indicator label</summary>
+    </key>
+
+    <key name="indicator-label-font-size" type="i">
+      <default>14</default>
+      <range min="6" max="28"/>
+      <summary>Leading indicator label font size</summary>
+    </key>
+
+    <key name="indicator-items-json" type="s">
+      <default>''</default>
+      <summary>Ordered custom indicator blocks and their layers</summary>
+    </key>
+
     <key name="display-mode" enum="org.gnome.shell.extensions.ai-usagebar.display-mode">
       <default>'number'</default>
       <summary>Panel visualization mode</summary>

@@ -38,6 +38,7 @@ export const Indicator = GObject.registerClass(
 class Indicator extends PanelMenu.Button {
     _init(settings, openPreferences, extensionPath) {
         super._init(0.0, 'ai-usagebar');
+        this.add_style_class_name('aiusagebar-compact');
 
         // Pin the whole popup to a consistent width (see .aiusagebar-popup). Set
         // on the menu's item box so it holds regardless of which vendor sub-menu
@@ -77,6 +78,8 @@ class Indicator extends PanelMenu.Button {
         this._vendorItems = new Map();  // vendorId -> PopupMenu.PopupSubMenuMenuItem
         this._enabledSig = '';
         this._heatmap = [];
+        this._heatmapLoaded = false;
+        this._heatmapLoading = false;
         this._visual = null;
 
         this._box = new St.BoxLayout({style_class: 'panel-status-menu-box'});
@@ -141,7 +144,8 @@ class Indicator extends PanelMenu.Button {
         // One immediate refresh, then poll. A rejected promise must never escape
         // into the timeout callback / event loop.
         this._refresh().catch(e => console.warn(`ai-usagebar: refresh failed: ${e}`));
-        this._refreshHeatmap();
+        if (this._needsHeatmap(this._config))
+            this._refreshHeatmap();
         this._rearmPollTimer(this._config.refreshIntervalSecs);
     }
 
@@ -193,6 +197,8 @@ class Indicator extends PanelMenu.Button {
         // Same active vendor: reflect config in-process only (no fetch).
         this._config = config;
         this._barFormat = config.barFormat;
+        if (this._needsHeatmap(config) && !this._heatmapLoaded)
+            this._refreshHeatmap();
         this._maybeRebuildVendorSections(config);
 
         // Appearance-only keys (severity colors, popup format, pace marker) affect
@@ -468,7 +474,8 @@ class Indicator extends PanelMenu.Button {
     }
 
     _paintLabelOk(snapshot, stale, now) {
-        if (this._config.display.mode !== 'number') {
+        this._paintLeadingLabel(snapshot, now);
+        if (this._config.display.customEnabled || this._config.display.mode !== 'number') {
             this._label.hide();
             if (this._visual)
                 this._visual.destroy();
@@ -548,13 +555,35 @@ class Indicator extends PanelMenu.Button {
         this._tag.text = vendorTag(id);
     }
 
+    _paintLeadingLabel(snapshot, now) {
+        const display = this._config.display;
+        this._tag.visible = display.labelEnabled;
+        if (!display.labelEnabled)
+            return;
+        let text = substitute(display.labelText, this._adapter.placeholders(snapshot, now));
+        if (display.labelText === '{vendor_short}')
+            text = text.toUpperCase();
+        this._tag.text = text;
+        this._tag.set_style(`font-size: ${display.labelFontSize}px;`);
+    }
+
     async _refreshHeatmap() {
+        if (this._heatmapLoading)
+            return;
+        this._heatmapLoading = true;
         const values = await loadContributionGraph(this._cancellable);
         if (this._destroyed)
             return;
         this._heatmap = values;
+        this._heatmapLoaded = true;
+        this._heatmapLoading = false;
         if (this._config.display.mode === 'heatmap')
             this._reRenderFromCache();
+    }
+
+    _needsHeatmap(config) {
+        return config.display.mode === 'heatmap'
+            || (config.display.customEnabled && config.display.items.some(item => item.type === 'heatmap'));
     }
 
     _makeActionButton(iconName, label, onClick) {
