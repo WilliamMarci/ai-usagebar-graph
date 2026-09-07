@@ -1,0 +1,13 @@
+{
+  "name": "AI Usage Bar",
+  "description": "Monitor the status of Claude, GPT, GLM, and OpenRouter plans/credits - inspired by akitaonrails/ai-usagebar",
+  "uuid": "ai-usagebar@wilfison",
+  "url": "https://github.com/wilfison/ai-usagebar",
+  "version": 5,
+  "version-name": "1.2.1",
+  "settings-schema": "org.gnome.shell.extensions.ai-usagebar",
+  "gettext-domain": "ai-usagebar@wilfison",
+  "shell-version": [
+    "50"
+  ]
+}

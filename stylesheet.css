@@ -1,0 +1,103 @@
+.aiusagebar-section {
+    spacing: 8px;
+}
+
+.aiusagebar-panel-tag {
+    font-weight: bold;
+    margin-right: 6px;
+}
+
+.aiusagebar-popup {
+    min-width: 320px;
+}
+
+.aiusagebar-popup .popup-submenu-menu-item {
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+.aiusagebar-popup .popup-sub-menu {
+    background-color: rgba(0, 0, 0, 0.1);
+    box-shadow: none;
+    border: none;
+}
+
+.aiusagebar-row {
+    spacing: 8px;
+}
+
+.aiusagebar-title {
+    font-weight: bold;
+}
+
+.aiusagebar-row-title {
+    font-weight: bold;
+}
+
+.aiusagebar-row-subtitle {
+    font-size: 0.85em;
+}
+
+.aiusagebar-dim {
+    opacity: 0.55;
+}
+
+.aiusagebar-card-row {
+    spacing: 6px;
+    padding: 8px 4px;
+}
+
+.aiusagebar-card-sep {
+    height: 1px;
+    background-color: rgba(127, 127, 127, 0.16);
+}
+
+.aiusagebar-rule {
+    height: 1px;
+    background-color: rgba(127, 127, 127, 0.16);
+}
+
+.aiusagebar-bar {
+    height: 8px;
+    border-radius: 4px;
+}
+
+.aiusagebar-bar-track {
+    background-color: rgba(127, 127, 127, 0.25);
+    border-radius: 4px;
+}
+
+.aiusagebar-bar-fill {
+    background-color: -st-accent-color;
+    border-radius: 4px;
+}
+
+.aiusagebar-bar-marker {
+    background-color: rgba(255, 255, 255, 0.85);
+    border-radius: 1px;
+}
+
+.aiusagebar-actions {
+    spacing: 12px;
+}
+
+.aiusagebar-action-button {
+    padding: 10px;
+    border-radius: 6px;
+}
+
+.aiusagebar-action-button:hover {
+    background-color: rgba(127, 127, 127, 0.15);
+}
+
+.aiusagebar-action-button:active,
+.aiusagebar-action-button:focus {
+    background-color: rgba(127, 127, 127, 0.25);
+}
+
+.aiusagebar-tooltip {
+    background-color: rgba(0, 0, 0, 0.85);
+    color: #ffffff;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.85em;
+}
