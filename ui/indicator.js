@@ -59,6 +59,7 @@ class Indicator extends PanelMenu.Button {
         this._rebuildTheme();
         this._timeoutId = null;
         this._renderTimeoutId = null;
+        this._visualTimerId = null;
         this._openStateId = null;
         this._scrollId = null;
         this._settingsChangedId = null;
@@ -146,6 +147,7 @@ class Indicator extends PanelMenu.Button {
         this._refresh().catch(e => console.warn(`ai-usagebar: refresh failed: ${e}`));
         if (this._needsHeatmap(this._config))
             this._refreshHeatmap();
+        this._rearmVisualTimer();
         this._rearmPollTimer(this._config.refreshIntervalSecs);
     }
 
@@ -163,8 +165,13 @@ class Indicator extends PanelMenu.Button {
     _onSettingsChanged(settings, key) {
         if (this._destroyed)
             return;
-        if (key === 'indicator-source-status')
+        if (key === 'indicator-source-status' || key === 'provider-test-result')
             return;
+        if (key === 'provider-test-request') {
+            const id = settings.get_string(key).split(':', 1)[0];
+            this._testProvider(id).catch(e => console.warn(`ai-usagebar: provider test failed: ${e}`));
+            return;
+        }
 
         // A primary-vendor change forces active := primary. The set_string re-enters
         // this handler as key='active-vendor'; GSettings emits nothing for an
@@ -177,6 +184,11 @@ class Indicator extends PanelMenu.Button {
                 writeActiveVendorMirror(primary);
                 return;
             }
+        }
+
+        if (key === 'deepseek-source' && this._adapter.id === 'deepseek') {
+            this._refresh().catch(e => console.warn(`ai-usagebar: refresh failed: ${e}`));
+            return;
         }
 
         const config = readConfig(this._settings);
@@ -199,6 +211,8 @@ class Indicator extends PanelMenu.Button {
         // Same active vendor: reflect config in-process only (no fetch).
         this._config = config;
         this._barFormat = config.barFormat;
+        if (key === 'indicator-items-json' || key === 'indicator-custom-enabled')
+            this._rearmVisualTimer();
         if (this._needsHeatmap(config) && !this._heatmapLoaded)
             this._refreshHeatmap();
         this._refreshLayoutSources(config, this._activeId)
@@ -595,6 +609,21 @@ class Indicator extends PanelMenu.Button {
             || (config.display.customEnabled && config.display.items.some(item => item.type === 'heatmap'));
     }
 
+    _rearmVisualTimer() {
+        if (this._visualTimerId) {
+            GLib.Source.remove(this._visualTimerId);
+            this._visualTimerId = null;
+        }
+        const hasTimer = this._config.display.customEnabled
+            && this._config.display.items.some(item => item.type === 'timer');
+        if (!hasTimer)
+            return;
+        this._visualTimerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 30, () => {
+            this._reRenderFromCache();
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
     _layoutVendorIds(config) {
         if (!config.display.customEnabled)
             return [];
@@ -604,6 +633,8 @@ class Indicator extends PanelMenu.Button {
                 if (layer.vendor && layer.vendor !== 'active') ids.add(layer.vendor);
             if (item.center?.vendor && item.center.vendor !== 'active')
                 ids.add(item.center.vendor);
+            if (item.type === 'timer' && item.vendor && item.vendor !== 'active')
+                ids.add(item.vendor);
         }
         return [...ids].filter(id => config.vendors[id]?.enabled === true);
     }
@@ -643,6 +674,32 @@ class Indicator extends PanelMenu.Button {
         const text = JSON.stringify(status);
         if (this._settings.get_string('indicator-source-status') !== text)
             this._settings.set_string('indicator-source-status', text);
+    }
+
+    async _testProvider(id) {
+        let result;
+        try {
+            const config = readConfig(this._settings);
+            const adapter = getAdapter(id);
+            const testCache = {
+                dir: `connection-test-${id}`, freshPayload: async () => null, payloadAgeMs: async () => null,
+                maybePayload: async () => null, readLastError: async () => null, isStale: () => false,
+                writePayload() {}, markStale() {}, writeLastError() {},
+            };
+            result = await this._runFetch(adapter, {config, cache: testCache,
+                http: request, signal: this._cancellable});
+            if (!this._destroyed)
+                this._storeResult(id, result);
+        } catch (e) {
+            result = {ok: false, message: e?.message ?? String(e)};
+        }
+        if (this._destroyed)
+            return;
+        let all = {};
+        try { all = JSON.parse(this._settings.get_string('provider-test-result')); } catch (_) { /* ignored */ }
+        all[id] = {ok: result.ok === true, message: result.ok ? _('Connection successful') : (result.message ?? result.kind ?? _('Unavailable')),
+            testedAt: Date.now()};
+        this._settings.set_string('provider-test-result', JSON.stringify(all));
     }
 
     _makeActionButton(iconName, label, onClick) {
@@ -715,6 +772,10 @@ class Indicator extends PanelMenu.Button {
         if (this._renderTimeoutId) {
             GLib.Source.remove(this._renderTimeoutId);
             this._renderTimeoutId = null;
+        }
+        if (this._visualTimerId) {
+            GLib.Source.remove(this._visualTimerId);
+            this._visualTimerId = null;
         }
         this._cancelTooltipTimer();
         if (this._tooltip) {

@@ -28,6 +28,7 @@ const COLOR_KEY_PALETTE = {
 export default class AiUsagebarPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
+        this._settings = settings;
         const cleanups = [];
 
         this._registerIconPath();
@@ -251,7 +252,8 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
             group.add(row); group._aiRows.push(row);
         });
 
-        for (const [type, title] of [['ring', _('Add ring')], ['bar', _('Add bar')], ['text', _('Add text')], ['heatmap', _('Add heatmap')]]) {
+        for (const [type, title] of [['ring', _('Add ring')], ['bar', _('Add bar')], ['text', _('Add text')],
+            ['timer', _('Add countdown')], ['heatmap', _('Add heatmap')]]) {
             const row = new Adw.ButtonRow({title, start_icon_name: 'list-add-symbolic'});
             row.connect('activated', () => { items.push(newItem(type)); structural(); });
             group.add(row); group._aiRows.push(row);
@@ -271,19 +273,45 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
             row.add_row(this._valueSpin(_('Width'), item.width, 18, 120, v => { item.width = v; save(); }));
             return;
         }
+        if (item.type === 'timer') {
+            row.add_row(this._valueCombo(_('Countdown mode'), [_('Quota reset'), _('Pomodoro')],
+                item.timerMode === 'pomodoro' ? 1 : 0, v => { item.timerMode = v === 1 ? 'pomodoro' : 'quota'; save(); }));
+            let sourceRow;
+            const vendorRow = this._vendorCombo(_('Data source'), item.vendor, v => {
+                item.vendor = v; save(); this._setSourceWarning(sourceRow, item.vendor, item.source);
+            });
+            sourceRow = this._sourceCombo(_('Countdown target'), item.source, v => {
+                item.source = v; save(); this._setSourceWarning(sourceRow, item.vendor, item.source);
+            }, item.vendor);
+            row.add_row(vendorRow); row.add_row(sourceRow);
+            row.add_row(this._valueSpin(_('Pomodoro minutes'), item.durationMinutes, 1, 180,
+                v => { item.durationMinutes = v; save(); }));
+            const restart = new Adw.ButtonRow({title: _('Restart countdown'), start_icon_name: 'view-refresh-symbolic'});
+            restart.connect('activated', () => { item.startedAt = Date.now(); save(); }); row.add_row(restart);
+            row.add_row(this._valueEntry(_('Prefix'), item.prefix, v => { item.prefix = v; save(); }));
+            row.add_row(this._valueSpin(_('Font size'), item.fontSize, 6, 24, v => { item.fontSize = v; save(); }));
+            return;
+        }
         row.add_row(this._valueSpin(item.type === 'ring' ? _('Diameter') : _('Height'), item.size, 16, 40, v => { item.size = v; save(); }));
-        if (item.type === 'ring')
-            row.add_row(this._valueSpin(_('Gap between layers'), item.layerGap, 0, 6, v => { item.layerGap = v; save(); }));
+        row.add_row(this._valueSpin(_('Gap between layers'), item.layerGap, 0, 6, v => { item.layerGap = v; save(); }));
         if (item.type === 'bar') {
             row.add_row(this._valueCombo(_('Orientation'), [_('Horizontal'), _('Vertical')], item.orientation === 'vertical' ? 1 : 0,
                 v => { item.orientation = v === 1 ? 'vertical' : 'horizontal'; save(); }));
             row.add_row(this._valueSpin(_('Length'), item.length, 16, 72, v => { item.length = v; save(); }));
         } else {
-            row.add_row(this._vendorCombo(_('Center data source'), item.center.vendor, v => { item.center.vendor = v; structural(); }));
+            let centerSource;
+            row.add_row(this._vendorCombo(_('Center data source'), item.center.vendor, v => {
+                item.center.vendor = v; save(); this._setSourceWarning(centerSource, item.center.vendor, item.center.source);
+            }));
             const center = new Adw.SwitchRow({title: _('Center text'), active: item.center.enabled});
             center.connect('notify::active', () => { item.center.enabled = center.active; save(); }); row.add_row(center);
-            row.add_row(this._sourceCombo(_('Center content'), item.center.source, v => { item.center.source = v; structural(); }, item.center.vendor));
+            centerSource = this._sourceCombo(_('Center content'), item.center.source, v => {
+                item.center.source = v; save(); this._setSourceWarning(centerSource, item.center.vendor, item.center.source);
+            }, item.center.vendor);
+            row.add_row(centerSource);
             row.add_row(this._modeCombo(_('Center mode'), item.center.mode, v => { item.center.mode = v; save(); }));
+            row.add_row(this._valueEntry(_('Center custom text ({value}; empty = number)'), item.center.template,
+                v => { item.center.template = v; save(); }));
             row.add_row(this._valueSpin(_('Center font size'), item.center.fontSize, 6, 16, v => { item.center.fontSize = v; save(); }));
         }
         item.layers.forEach((layer, layerIndex) => {
@@ -292,8 +320,14 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
                 if (layerIndex > 0) { [item.layers[layerIndex - 1], item.layers[layerIndex]] = [item.layers[layerIndex], item.layers[layerIndex - 1]]; structural(); }
             }));
             lr.add_suffix(this._smallButton('user-trash-symbolic', _('Remove layer'), () => { item.layers.splice(layerIndex, 1); structural(); }));
-            lr.add_row(this._vendorCombo(_('Data source'), layer.vendor, v => { layer.vendor = v; structural(); }));
-            lr.add_row(this._sourceCombo(_('Content'), layer.source, v => { layer.source = v; structural(); }, layer.vendor));
+            let layerSource;
+            lr.add_row(this._vendorCombo(_('Data source'), layer.vendor, v => {
+                layer.vendor = v; save(); this._setSourceWarning(layerSource, layer.vendor, layer.source);
+            }));
+            layerSource = this._sourceCombo(_('Content'), layer.source, v => {
+                layer.source = v; save(); this._setSourceWarning(layerSource, layer.vendor, layer.source);
+            }, layer.vendor);
+            lr.add_row(layerSource);
             lr.add_row(this._modeCombo(_('Mode'), layer.mode, v => { layer.mode = v; save(); }));
             const tiered = new Adw.SwitchRow({title: _('Use severity color tiers'), active: layer.tiered});
             tiered.connect('notify::active', () => { layer.tiered = tiered.active; save(); }); lr.add_row(tiered);
@@ -305,6 +339,12 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
                     defaultTheme()[{low: 'green', mid: 'yellow', high: 'orange', critical: 'red'}[key]],
                     v => { layer.tierColors[key] = v; save(); }));
             lr.add_row(this._valueSpin(_('Thickness'), layer.thickness, 1, 6, v => { layer.thickness = v; save(); }));
+            lr.add_row(this._valueEntry(_('Small label ({value} = displayed value)'), layer.label,
+                v => { layer.label = v; save(); }));
+            lr.add_row(this._valueCombo(_('Label position'), [_('End / bottom'), _('Start / top')],
+                layer.labelPosition === 'start' ? 1 : 0, v => { layer.labelPosition = v === 1 ? 'start' : 'end'; save(); }));
+            lr.add_row(this._valueSpin(_('Label font size'), layer.labelFontSize, 5, 12,
+                v => { layer.labelFontSize = v; save(); }));
             row.add_row(lr);
         });
         const add = new Adw.ButtonRow({title: _('Add layer'), start_icon_name: 'list-add-symbolic'});
@@ -313,7 +353,7 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         row.add_row(add);
     }
 
-    _itemTitle(type) { return ({ring: _('Ring'), bar: _('Bar'), text: _('Text'), heatmap: _('Heatmap')})[type] ?? type; }
+    _itemTitle(type) { return ({ring: _('Ring'), bar: _('Bar'), text: _('Text'), timer: _('Countdown'), heatmap: _('Heatmap')})[type] ?? type; }
     _smallButton(icon, tooltip, callback) {
         const button = new Gtk.Button({icon_name: icon, tooltip_text: tooltip, valign: Gtk.Align.CENTER, css_classes: ['flat']});
         button.connect('clicked', callback); return button;
@@ -336,11 +376,23 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
     _sourceCombo(title, selected, callback, vendor = 'active') {
         const labels = ['5h quota', '1w quota', 'Monthly quota', '5h reset', '1w reset', 'Monthly reset', 'Peak quota'];
         const row = this._valueCombo(title, labels, Math.max(0, SOURCES.indexOf(selected)), i => callback(SOURCES[i]));
-        if (!sourceSupported(vendor, selected)) {
+        if (!this._supportsVisualSource(vendor, selected)) {
             row.subtitle = _('This source does not expose the selected quota as a percentage. The layer will stay empty.');
             row.add_css_class('error');
         }
         return row;
+    }
+    _setSourceWarning(row, vendor, source) {
+        if (!row) return;
+        const unsupported = !this._supportsVisualSource(vendor, source);
+        row.subtitle = unsupported
+            ? _('This source does not expose the selected quota as a percentage. The layer will stay empty.') : '';
+        if (unsupported) row.add_css_class('error'); else row.remove_css_class('error');
+    }
+    _supportsVisualSource(vendor, source) {
+        if (vendor === 'deepseek')
+            return this._settings?.get_string('deepseek-source') === 'opencode';
+        return sourceSupported(vendor, source);
     }
     _modeCombo(title, selected, callback) {
         return this._valueCombo(title, [_('Remaining'), _('Used')], selected === 'used' ? 1 : 0, i => callback(i === 1 ? 'used' : 'remaining'));
@@ -469,6 +521,7 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         });
         group.add(this._switchRow(settings, 'anthropic-enabled', _('Enabled')));
         group.add(this._entryRow(settings, 'anthropic-credentials-path', _('Credentials path')));
+        group.add(this._testProviderRow(settings, 'anthropic'));
         return group;
     }
 
@@ -479,6 +532,7 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         });
         group.add(this._switchRow(settings, 'openai-enabled', _('Enabled')));
         group.add(this._entryRow(settings, 'openai-codex-auth-path', _('Codex auth path')));
+        group.add(this._testProviderRow(settings, 'openai'));
         return group;
     }
 
@@ -491,6 +545,7 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         group.add(this._entryRow(settings, 'zai-api-key-env', _('API key env var')));
         group.add(this._passwordRow(settings, 'zai-api-key', _('API key (inline)')));
         group.add(this._entryRow(settings, 'zai-plan-tier', _('Plan tier (lite/pro/max)')));
+        group.add(this._testProviderRow(settings, 'zai'));
         return group;
     }
 
@@ -502,6 +557,7 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         group.add(this._switchRow(settings, 'openrouter-enabled', _('Enabled')));
         group.add(this._entryRow(settings, 'openrouter-api-key-env', _('API key env var')));
         group.add(this._passwordRow(settings, 'openrouter-api-key', _('API key (inline)')));
+        group.add(this._testProviderRow(settings, 'openrouter'));
         return group;
     }
 
@@ -511,8 +567,16 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
             description: _('Disabled by default; requires an API key (env var or inline).'),
         });
         group.add(this._switchRow(settings, 'deepseek-enabled', _('Enabled')));
+        const sources = new Gtk.StringList();
+        [_('DeepSeek API balance'), _('OpenCode Go quota (all models)')].forEach(x => sources.append(x));
+        const source = new Adw.ComboRow({title: _('Usage source'), model: sources,
+            subtitle: _('OpenCode Go exposes aggregate quota; it cannot isolate DeepSeek-only consumption.')});
+        source.selected = settings.get_string('deepseek-source') === 'opencode' ? 1 : 0;
+        source.connect('notify::selected', () => settings.set_string('deepseek-source', source.selected === 1 ? 'opencode' : 'api'));
+        group.add(source);
         group.add(this._entryRow(settings, 'deepseek-api-key-env', _('API key env var')));
         group.add(this._passwordRow(settings, 'deepseek-api-key', _('API key (inline)')));
+        group.add(this._testProviderRow(settings, 'deepseek'));
         return group;
     }
 
@@ -524,6 +588,7 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         group.add(this._switchRow(settings, 'kimi-enabled', _('Enabled')));
         group.add(this._entryRow(settings, 'kimi-api-key-env', _('API key env var')));
         group.add(this._passwordRow(settings, 'kimi-api-key', _('API key (inline)')));
+        group.add(this._testProviderRow(settings, 'kimi'));
         return group;
     }
 
@@ -536,7 +601,29 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         group.add(this._entryRow(settings, 'opencode-base-url', _('API base URL')));
         group.add(this._entryRow(settings, 'opencode-api-key-env', _('API key env var')));
         group.add(this._passwordRow(settings, 'opencode-api-key', _('API key (inline)')));
+        group.add(this._testProviderRow(settings, 'opencode'));
         return group;
+    }
+
+    _testProviderRow(settings, id) {
+        const row = new Adw.ActionRow({title: _('Connection check'), subtitle: _('Not tested in this session')});
+        const button = new Gtk.Button({label: _('Test'), valign: Gtk.Align.CENTER, css_classes: ['suggested-action']});
+        const sync = () => {
+            let results = {};
+            try { results = JSON.parse(settings.get_string('provider-test-result')); } catch (_) { /* ignored */ }
+            const result = results[id];
+            if (!result) return;
+            row.subtitle = result.message;
+            if (result.ok) row.remove_css_class('error'); else row.add_css_class('error');
+            button.sensitive = true;
+        };
+        button.connect('clicked', () => {
+            button.sensitive = false;
+            row.subtitle = _('Testing…');
+            settings.set_string('provider-test-request', `${id}:${Date.now()}`);
+        });
+        settings.connect('changed::provider-test-result', sync);
+        sync(); row.add_suffix(button); return row;
     }
 
     _switchRow(settings, key, title) {

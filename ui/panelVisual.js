@@ -9,13 +9,22 @@ function rgba(hex, alpha = 1) {
     return [0, 2, 4].map(i => Number.parseInt(s.slice(i, i + 2), 16) / 255).concat(alpha);
 }
 function setColor(cr, color) { cr.setSourceRGBA(...color); }
+function roundedRect(cr, x, y, width, height, radius) {
+    const r = Math.min(radius, width / 2, height / 2);
+    cr.newSubPath(); cr.arc(x + width - r, y + r, r, -Math.PI / 2, 0);
+    cr.arc(x + width - r, y + height - r, r, 0, Math.PI / 2);
+    cr.arc(x + r, y + height - r, r, Math.PI / 2, Math.PI);
+    cr.arc(x + r, y + r, r, Math.PI, Math.PI * 1.5); cr.closePath();
+}
 
 const BlockArea = GObject.registerClass(class BlockArea extends St.DrawingArea {
     _init(item, values, config, theme, heatmap) {
         let width = item.size, height = item.size;
         if (item.type === 'bar') {
-            width = item.orientation === 'vertical' ? Math.max(10, item.layers.length * 6) : item.length;
-            height = item.orientation === 'vertical' ? item.size : Math.max(8, item.layers.length * 6);
+            const span = item.layers.reduce((sum, layer) => sum + Math.max(2, Math.min(layer.thickness + 1, 6)), 0)
+                + Math.max(0, item.layers.length - 1) * (item.layerGap ?? 2);
+            width = item.orientation === 'vertical' ? Math.max(10, span) : item.length;
+            height = item.orientation === 'vertical' ? item.size : Math.max(8, span);
         } else if (item.type === 'heatmap') {
             width = item.width; height = 20;
         }
@@ -33,10 +42,12 @@ const BlockArea = GObject.registerClass(class BlockArea extends St.DrawingArea {
     }
     _layerColor(layer) {
         const raw = this._values.get(layer.vendor, layer.source);
-        const used = layer.source.endsWith('_reset') ? 100 - raw : raw;
         if (!layer.tiered)
             return layer.color;
-        const severity = severityFor(used);
+        // `raw` is always the consumed/elapsed percentage. This makes colour
+        // tiers automatically inverse when the visible fill uses Remaining:
+        // 90% used and 10% remaining both resolve to Critical.
+        const severity = severityFor(raw);
         return layer.tierColors?.[severity] || severityColor(severity, this._theme);
     }
     _fraction(layer) {
@@ -59,19 +70,34 @@ const BlockArea = GObject.registerClass(class BlockArea extends St.DrawingArea {
         });
     }
     _bar(cr, w, h) {
-        const vertical = this._item.orientation === 'vertical', gap = 2;
+        const vertical = this._item.orientation === 'vertical', gap = this._item.layerGap ?? 2;
         this._item.layers.forEach((layer, i) => {
             const fraction = clamp(this._fraction(layer)) / 100;
             const thickness = Math.max(2, Math.min(layer.thickness + 1, 6));
             setColor(cr, rgba(this._config.trackColor ?? '#77767b', .35));
             if (vertical) {
                 const x = i * (thickness + gap);
-                cr.rectangle(x, 0, thickness, h); cr.fill();
-                setColor(cr, rgba(this._layerColor(layer))); cr.rectangle(x, h * (1 - fraction), thickness, h * fraction); cr.fill();
+                roundedRect(cr, x, 0, thickness, h, thickness / 2); cr.fill();
+                if (fraction > 0) {
+                    setColor(cr, rgba(this._layerColor(layer)));
+                    roundedRect(cr, x, h * (1 - fraction), thickness, h * fraction, thickness / 2); cr.fill();
+                }
             } else {
                 const y = i * (thickness + gap);
-                cr.rectangle(0, y, w, thickness); cr.fill();
-                setColor(cr, rgba(this._layerColor(layer))); cr.rectangle(0, y, w * fraction, thickness); cr.fill();
+                roundedRect(cr, 0, y, w, thickness, thickness / 2); cr.fill();
+                if (fraction > 0) {
+                    setColor(cr, rgba(this._layerColor(layer)));
+                    roundedRect(cr, 0, y, w * fraction, thickness, thickness / 2); cr.fill();
+                }
+            }
+            if (layer.label) {
+                const text = layer.label.replace('{value}', String(Math.round(this._fraction(layer))));
+                cr.selectFontFace('Sans', 0, 0); cr.setFontSize(layer.labelFontSize);
+                setColor(cr, rgba('#ffffff', .9));
+                const ext = cr.textExtents(text);
+                const x = vertical ? i * (thickness + gap) : (layer.labelPosition === 'start' ? 1 : Math.max(1, w - ext.width - 1));
+                const y = vertical ? (layer.labelPosition === 'start' ? layer.labelFontSize : h - 1) : i * (thickness + gap) + thickness;
+                cr.moveTo(x, y); cr.showText(text);
             }
         });
     }
@@ -102,6 +128,9 @@ function valuesFor(adapter, snapshot, now) {
         ['monthly_reset', resetUsed(snapshot.monthly, 30 * 86400e3, now)],
     ]);
     values.set('peak', Math.max(values.get('session'), values.get('weekly'), values.get('monthly')));
+    values.set('session_reset_at', (session?.resetsAt ?? session?.resetAt)?.getTime?.() ?? 0);
+    values.set('weekly_reset_at', (snapshot.weekly?.resetsAt ?? snapshot.weekly?.resetAt)?.getTime?.() ?? 0);
+    values.set('monthly_reset_at', (snapshot.monthly?.resetsAt ?? snapshot.monthly?.resetAt)?.getTime?.() ?? 0);
     return {placeholders: p, values};
 }
 function valueFor(data, vendor, source, mode) {
@@ -134,11 +163,25 @@ function ringBlock(item, values, config, theme, heatmap) {
         return new BlockArea(item, values, config, theme, heatmap);
     const overlay = new St.Widget({layout_manager: new Clutter.BinLayout(), width: item.size, height: item.size});
     overlay.add_child(new BlockArea(item, values, config, theme, heatmap));
-    const label = new St.Label({text: String(valueFor(values, item.center.vendor, item.center.source, item.center.mode)),
+    const value = String(valueFor(values, item.center.vendor, item.center.source, item.center.mode));
+    const text = item.center.template ? item.center.template.replace('{value}', value) : value;
+    const label = new St.Label({text,
         x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER});
     label.set_style(`font-size: ${item.center.fontSize}px; font-family: monospace; font-weight: 600;`);
     overlay.add_child(label);
     return overlay;
+}
+function timerBlock(item, values, now) {
+    const source = item.source.endsWith('_reset') ? item.source : `${item.source}_reset`;
+    const resetAt = item.timerMode === 'pomodoro'
+        ? item.startedAt + item.durationMinutes * 60_000
+        : values.get(item.vendor, `${source}_at`);
+    const seconds = Math.max(0, Math.floor((resetAt - now.getTime()) / 1000));
+    const hours = Math.floor(seconds / 3600), minutes = Math.floor(seconds % 3600 / 60), secs = seconds % 60;
+    const time = hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}` : `${minutes}:${String(secs).padStart(2, '0')}`;
+    const label = new St.Label({text: `${item.prefix}${time}`, y_align: Clutter.ActorAlign.CENTER});
+    label.set_style(`font-size: ${item.fontSize}px; font-family: monospace; font-variant-numeric: tabular-nums;`);
+    return label;
 }
 export function makePanelVisual(adapter, snapshot, now, config, theme, heatmap = [], vendorSnapshots = new Map()) {
     const active = valuesFor(adapter, snapshot, now), perVendor = new Map([['active', active]]);
@@ -156,6 +199,7 @@ export function makePanelVisual(adapter, snapshot, now, config, theme, heatmap =
     for (const item of items) {
         if (item.type === 'text') box.add_child(textBlock(item, active.placeholders, values));
         else if (item.type === 'ring') box.add_child(ringBlock(item, values, config, theme, calendar));
+        else if (item.type === 'timer') box.add_child(timerBlock(item, values, now));
         else box.add_child(new BlockArea(item, values, config, theme, calendar));
     }
     return box;
