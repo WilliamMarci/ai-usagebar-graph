@@ -9,7 +9,7 @@ import {rgbToHex} from './lib/color.js';
 import {vformat} from './lib/format.js';
 import {defaultTheme} from './lib/theme.js';
 import {VENDOR_LABELS} from './lib/vendors.js';
-import {parseIndicatorLayout, serializeIndicatorLayout, newItem, SOURCES} from './lib/indicator-layout.js';
+import {parseIndicatorLayout, serializeIndicatorLayout, newItem, SOURCES, VISUAL_VENDORS, sourceSupported} from './lib/indicator-layout.js';
 
 const INTERVAL_MIN = 300;
 const INTERVAL_MAX = 86400;
@@ -220,6 +220,13 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         general.add(this._colorRow(settings, 'heatmap-color', _('Heatmap color'), '#2ec27e', cleanups));
         page.add(general);
 
+        const status = new Adw.PreferencesGroup({title: _('Data source status')});
+        page.add(status);
+        const rebuildStatus = () => this._rebuildSourceStatus(settings, status);
+        rebuildStatus();
+        const statusId = settings.connect('changed::indicator-source-status', rebuildStatus);
+        cleanups.push(() => settings.disconnect(statusId));
+
         const layout = new Adw.PreferencesGroup({
             title: _('Ordered blocks'),
             description: _('Build the panel from any number of rings, bars, text blocks, and heatmaps. Changes redraw only when settings or quota data change.'),
@@ -271,14 +278,17 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
             return;
         }
         row.add_row(this._valueSpin(item.type === 'ring' ? _('Diameter') : _('Height'), item.size, 16, 40, v => { item.size = v; save(); }));
+        if (item.type === 'ring')
+            row.add_row(this._valueSpin(_('Gap between layers'), item.layerGap, 0, 6, v => { item.layerGap = v; save(); }));
         if (item.type === 'bar') {
             row.add_row(this._valueCombo(_('Orientation'), [_('Horizontal'), _('Vertical')], item.orientation === 'vertical' ? 1 : 0,
                 v => { item.orientation = v === 1 ? 'vertical' : 'horizontal'; save(); }));
             row.add_row(this._valueSpin(_('Length'), item.length, 16, 72, v => { item.length = v; save(); }));
         } else {
+            row.add_row(this._vendorCombo(_('Center data source'), item.center.vendor, v => { item.center.vendor = v; structural(); }));
             const center = new Adw.SwitchRow({title: _('Center text'), active: item.center.enabled});
             center.connect('notify::active', () => { item.center.enabled = center.active; save(); }); row.add_row(center);
-            row.add_row(this._sourceCombo(_('Center content'), item.center.source, v => { item.center.source = v; save(); }));
+            row.add_row(this._sourceCombo(_('Center content'), item.center.source, v => { item.center.source = v; structural(); }, item.center.vendor));
             row.add_row(this._modeCombo(_('Center mode'), item.center.mode, v => { item.center.mode = v; save(); }));
             row.add_row(this._valueSpin(_('Center font size'), item.center.fontSize, 6, 16, v => { item.center.fontSize = v; save(); }));
         }
@@ -288,20 +298,23 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
                 if (layerIndex > 0) { [item.layers[layerIndex - 1], item.layers[layerIndex]] = [item.layers[layerIndex], item.layers[layerIndex - 1]]; structural(); }
             }));
             lr.add_suffix(this._smallButton('user-trash-symbolic', _('Remove layer'), () => { item.layers.splice(layerIndex, 1); structural(); }));
-            lr.add_row(this._sourceCombo(_('Content'), layer.source, v => { layer.source = v; save(); }));
+            lr.add_row(this._vendorCombo(_('Data source'), layer.vendor, v => { layer.vendor = v; structural(); }));
+            lr.add_row(this._sourceCombo(_('Content'), layer.source, v => { layer.source = v; structural(); }, layer.vendor));
             lr.add_row(this._modeCombo(_('Mode'), layer.mode, v => { layer.mode = v; save(); }));
             const tiered = new Adw.SwitchRow({title: _('Use severity color tiers'), active: layer.tiered});
             tiered.connect('notify::active', () => { layer.tiered = tiered.active; save(); }); lr.add_row(tiered);
-            lr.add_row(this._valueEntry(_('Fixed color (hex)'), layer.color, v => { layer.color = v; save(); }));
+            lr.add_row(this._layoutColorRow(_('Fixed color'), layer.color, '#2ec27e', v => { layer.color = v; save(); }));
             layer.tierColors ??= {low: '', mid: '', high: '', critical: ''};
             for (const [key, title] of [['low', _('Low tier color')], ['mid', _('Mid tier color')],
                 ['high', _('High tier color')], ['critical', _('Critical tier color')]])
-                lr.add_row(this._valueEntry(`${title} (${_('empty = global')})`, layer.tierColors[key], v => { layer.tierColors[key] = v; save(); }));
+                lr.add_row(this._layoutColorRow(`${title} (${_('empty = global')})`, layer.tierColors[key],
+                    defaultTheme()[{low: 'green', mid: 'yellow', high: 'orange', critical: 'red'}[key]],
+                    v => { layer.tierColors[key] = v; save(); }));
             lr.add_row(this._valueSpin(_('Thickness'), layer.thickness, 1, 6, v => { layer.thickness = v; save(); }));
             row.add_row(lr);
         });
         const add = new Adw.ButtonRow({title: _('Add layer'), start_icon_name: 'list-add-symbolic'});
-        add.connect('activated', () => { item.layers.push({source: 'session', mode: 'remaining', color: '#2ec27e', tiered: true,
+        add.connect('activated', () => { item.layers.push({vendor: 'active', source: 'session', mode: 'remaining', color: '#2ec27e', tiered: true,
             tierColors: {low: '', mid: '', high: '', critical: ''}, thickness: 2}); structural(); });
         row.add_row(add);
     }
@@ -322,9 +335,18 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         const model = new Gtk.StringList(); labels.forEach(x => model.append(x));
         const row = new Adw.ComboRow({title, model, selected}); row.connect('notify::selected', () => callback(row.selected)); return row;
     }
-    _sourceCombo(title, selected, callback) {
+    _vendorCombo(title, selected, callback) {
+        return this._valueCombo(title, [_('Active vendor'), ...VENDOR_LABELS],
+            Math.max(0, VISUAL_VENDORS.indexOf(selected)), i => callback(VISUAL_VENDORS[i]));
+    }
+    _sourceCombo(title, selected, callback, vendor = 'active') {
         const labels = ['5h quota', '1w quota', 'Monthly quota', '5h reset', '1w reset', 'Monthly reset', 'Peak quota'];
-        return this._valueCombo(title, labels, Math.max(0, SOURCES.indexOf(selected)), i => callback(SOURCES[i]));
+        const row = this._valueCombo(title, labels, Math.max(0, SOURCES.indexOf(selected)), i => callback(SOURCES[i]));
+        if (!sourceSupported(vendor, selected)) {
+            row.subtitle = _('This source does not expose the selected quota as a percentage. The layer will stay empty.');
+            row.add_css_class('error');
+        }
+        return row;
     }
     _modeCombo(title, selected, callback) {
         return this._valueCombo(title, [_('Remaining'), _('Used')], selected === 'used' ? 1 : 0, i => callback(i === 1 ? 'used' : 'remaining'));
@@ -343,6 +365,54 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
                 row.value = value;
         });
         return row;
+    }
+
+    _layoutColorRow(title, value, fallback, callback) {
+        const row = new Adw.ActionRow({title});
+        const dialog = new Gtk.ColorDialog({with_alpha: false});
+        const picker = new Gtk.ColorDialogButton({dialog, valign: Gtk.Align.CENTER});
+        const reset = new Gtk.Button({icon_name: 'edit-clear-symbolic', tooltip_text: _('Use inherited color'),
+            valign: Gtk.Align.CENTER, css_classes: ['flat']});
+        const color = new Gdk.RGBA(); color.parse(value || fallback); picker.set_rgba(color);
+        let syncing = false;
+        picker.connect('notify::rgba', () => {
+            if (syncing) return;
+            const {red, green, blue} = picker.get_rgba();
+            callback(rgbToHex(red, green, blue));
+        });
+        reset.connect('clicked', () => {
+            syncing = true; const c = new Gdk.RGBA(); c.parse(fallback); picker.set_rgba(c); syncing = false; callback('');
+        });
+        row.add_suffix(picker); row.add_suffix(reset); return row;
+    }
+
+    _rebuildSourceStatus(settings, group) {
+        for (const row of group._aiRows ?? [])
+            group.remove(row);
+        group._aiRows = [];
+        let status = {};
+        try { status = JSON.parse(settings.get_string('indicator-source-status')); } catch (_) { /* ignored */ }
+        const layout = parseIndicatorLayout(settings.get_string('indicator-items-json'));
+        for (const item of layout) {
+            const vendors = [...(item.layers ?? []).map(layer => layer.vendor), item.center?.vendor];
+            for (const id of vendors) {
+                if (id && id !== 'active' && settings.settings_schema.has_key(`${id}-enabled`)
+                    && !settings.get_boolean(`${id}-enabled`))
+                    status[id] = {ok: false, message: _('Referenced by the layout, but disabled in its vendor settings.')};
+            }
+        }
+        const entries = Object.entries(status);
+        if (!entries.length) {
+            const row = new Adw.ActionRow({title: _('No runtime data yet'), subtitle: _('The extension will report authentication and request failures here.')});
+            group.add(row); group._aiRows.push(row); return;
+        }
+        for (const [id, state] of entries) {
+            const row = new Adw.ActionRow({title: id === 'openai' ? 'OpenAI' : id === 'opencode' ? 'OpenCode' : id,
+                subtitle: state.ok ? _('Available') : (state.message || state.kind || _('Unavailable'))});
+            row.add_prefix(new Gtk.Image({icon_name: state.ok ? 'emblem-ok-symbolic' : 'dialog-warning-symbolic'}));
+            if (!state.ok) row.add_css_class('error');
+            group.add(row); group._aiRows.push(row);
+        }
     }
 
     _registerIconPath() {

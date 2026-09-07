@@ -163,6 +163,8 @@ class Indicator extends PanelMenu.Button {
     _onSettingsChanged(settings, key) {
         if (this._destroyed)
             return;
+        if (key === 'indicator-source-status')
+            return;
 
         // A primary-vendor change forces active := primary. The set_string re-enters
         // this handler as key='active-vendor'; GSettings emits nothing for an
@@ -199,6 +201,8 @@ class Indicator extends PanelMenu.Button {
         this._barFormat = config.barFormat;
         if (this._needsHeatmap(config) && !this._heatmapLoaded)
             this._refreshHeatmap();
+        this._refreshLayoutSources(config, this._activeId)
+            .catch(e => console.warn(`ai-usagebar: layout source refresh failed: ${e}`));
         this._maybeRebuildVendorSections(config);
 
         // Appearance-only keys (severity colors, popup format, pace marker) affect
@@ -318,6 +322,8 @@ class Indicator extends PanelMenu.Button {
         this._storeResult(activeId, res);
         this._maybeNotify(this._adapter, this._cache, res, this._config);
         this._render(res);
+        this._refreshLayoutSources(this._config, activeId)
+            .catch(e => console.warn(`ai-usagebar: layout source refresh failed: ${e}`));
     }
 
     async _refreshAll() {
@@ -369,6 +375,7 @@ class Indicator extends PanelMenu.Button {
         this._results.set(id, res);
         if (res.ok)
             this._fetchedAt.set(id, new Date(Date.now() - res.cacheAgeMs));
+        this._publishSourceStatus();
     }
 
     // Once-per-crossing notification; the per-vendor cache flag debounces re-fires.
@@ -480,7 +487,9 @@ class Indicator extends PanelMenu.Button {
             if (this._visual)
                 this._visual.destroy();
             this._visual = makePanelVisual(
-                this._adapter, snapshot, now, this._config.display, this._theme, this._heatmap);
+                this._adapter, snapshot, now, this._config.display, this._theme, this._heatmap,
+                new Map([...this._results].filter(([, result]) => result.ok).map(([id, result]) =>
+                    [id, {adapter: getAdapter(id), snapshot: result.snapshot}])));
             this._box.add_child(this._visual);
             return;
         }
@@ -584,6 +593,56 @@ class Indicator extends PanelMenu.Button {
     _needsHeatmap(config) {
         return config.display.mode === 'heatmap'
             || (config.display.customEnabled && config.display.items.some(item => item.type === 'heatmap'));
+    }
+
+    _layoutVendorIds(config) {
+        if (!config.display.customEnabled)
+            return [];
+        const ids = new Set();
+        for (const item of config.display.items) {
+            for (const layer of item.layers ?? [])
+                if (layer.vendor && layer.vendor !== 'active') ids.add(layer.vendor);
+            if (item.center?.vendor && item.center.vendor !== 'active')
+                ids.add(item.center.vendor);
+        }
+        return [...ids].filter(id => config.vendors[id]?.enabled === true);
+    }
+
+    async _refreshLayoutSources(config, activeId) {
+        if (this._layoutSourceRefreshRunning)
+            return;
+        this._layoutSourceRefreshRunning = true;
+        try {
+            for (const id of this._layoutVendorIds(config)) {
+                if (id === activeId)
+                    continue;
+                const adapter = getAdapter(id);
+                const cache = Cache.forVendor(adapter.cacheId);
+                let result;
+                try {
+                    result = await this._runFetch(adapter, {config, cache, http: request, signal: this._cancellable});
+                } catch (e) {
+                    result = {ok: false, kind: 'error', message: e?.message ?? String(e)};
+                }
+                if (this._destroyed)
+                    return;
+                this._storeResult(id, result);
+            }
+            this._reRenderFromCache();
+        } finally {
+            this._layoutSourceRefreshRunning = false;
+        }
+    }
+
+    _publishSourceStatus() {
+        if (!this._settings)
+            return;
+        const status = {};
+        for (const [id, result] of this._results)
+            status[id] = result.ok ? {ok: true} : {ok: false, kind: result.kind, message: result.message ?? ''};
+        const text = JSON.stringify(status);
+        if (this._settings.get_string('indicator-source-status') !== text)
+            this._settings.set_string('indicator-source-status', text);
     }
 
     _makeActionButton(iconName, label, onClick) {

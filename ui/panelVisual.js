@@ -32,7 +32,7 @@ const BlockArea = GObject.registerClass(class BlockArea extends St.DrawingArea {
         cr.$dispose();
     }
     _layerColor(layer) {
-        const raw = this._values.get(layer.source) ?? 0;
+        const raw = this._values.get(layer.vendor, layer.source);
         const used = layer.source.endsWith('_reset') ? 100 - raw : raw;
         if (!layer.tiered)
             return layer.color;
@@ -40,21 +40,22 @@ const BlockArea = GObject.registerClass(class BlockArea extends St.DrawingArea {
         return layer.tierColors?.[severity] || severityColor(severity, this._theme);
     }
     _fraction(layer) {
-        const value = this._values.get(layer.source) ?? 0;
+        const value = this._values.get(layer.vendor, layer.source);
         return layer.mode === 'used' ? value : 100 - value;
     }
     _ring(cr, w, h) {
         const layers = this._item.layers;
         const cx = w / 2, cy = h / 2;
-        const step = Math.max(2.5, (Math.min(w, h) / 2 - 2) / layers.length);
+        let radius = Math.min(w, h) / 2 - 2;
         layers.forEach((layer, i) => {
-            const radius = Math.min(w, h) / 2 - 2 - i * step;
             if (radius <= 1) return;
-            cr.setLineWidth(Math.min(layer.thickness, Math.max(1, step - .5))); cr.setLineCap(1);
+            const thickness = Math.min(layer.thickness, Math.max(1, radius));
+            cr.setLineWidth(thickness); cr.setLineCap(1);
             setColor(cr, rgba(this._config.trackColor ?? '#77767b', .35));
             cr.arc(cx, cy, radius, 0, Math.PI * 2); cr.stroke();
             setColor(cr, rgba(this._layerColor(layer)));
             cr.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp(this._fraction(layer)) / 100); cr.stroke();
+            radius -= thickness / 2 + (this._item.layerGap ?? .5) + (layers[i + 1]?.thickness ?? 0) / 2;
         });
     }
     _bar(cr, w, h) {
@@ -103,15 +104,18 @@ function valuesFor(adapter, snapshot, now) {
     values.set('peak', Math.max(values.get('session'), values.get('weekly'), values.get('monthly')));
     return {placeholders: p, values};
 }
-function valueFor(values, source, mode) {
-    const value = values.get(source) ?? 0;
+function valueFor(data, vendor, source, mode) {
+    const value = data.get(vendor, source);
     return Math.round(mode === 'used' ? value : 100 - value);
 }
 function textBlock(item, placeholders, values) {
     const derived = new Map(placeholders);
-    for (const source of ['session', 'weekly', 'monthly', 'session_reset', 'weekly_reset', 'monthly_reset', 'peak']) {
-        derived.set(`${source}_used`, String(valueFor(values, source, 'used')));
-        derived.set(`${source}_remaining`, String(valueFor(values, source, 'remaining')));
+    for (const vendor of ['active', 'anthropic', 'openai', 'zai', 'openrouter', 'deepseek', 'kimi', 'opencode']) {
+        for (const source of ['session', 'weekly', 'monthly', 'session_reset', 'weekly_reset', 'monthly_reset', 'peak']) {
+            const prefix = vendor === 'active' ? source : `${vendor}_${source}`;
+            derived.set(`${prefix}_used`, String(valueFor(values, vendor, source, 'used')));
+            derived.set(`${prefix}_remaining`, String(valueFor(values, vendor, source, 'remaining')));
+        }
     }
     const render = template => template.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, key) => derived.has(key) ? derived.get(key) : match);
     const box = new St.BoxLayout({vertical: true, y_align: Clutter.ActorAlign.CENTER, style_class: 'aiusagebar-text-stack'});
@@ -130,18 +134,27 @@ function ringBlock(item, values, config, theme, heatmap) {
         return new BlockArea(item, values, config, theme, heatmap);
     const overlay = new St.Widget({layout_manager: new Clutter.BinLayout(), width: item.size, height: item.size});
     overlay.add_child(new BlockArea(item, values, config, theme, heatmap));
-    const label = new St.Label({text: String(valueFor(values, item.center.source, item.center.mode)),
+    const label = new St.Label({text: String(valueFor(values, item.center.vendor, item.center.source, item.center.mode)),
         x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER});
     label.set_style(`font-size: ${item.center.fontSize}px; font-family: monospace; font-weight: 600;`);
     overlay.add_child(label);
     return overlay;
 }
-export function makePanelVisual(adapter, snapshot, now, config, theme, heatmap = []) {
-    const {placeholders, values} = valuesFor(adapter, snapshot, now), calendar = calendarCells(heatmap, now);
+export function makePanelVisual(adapter, snapshot, now, config, theme, heatmap = [], vendorSnapshots = new Map()) {
+    const active = valuesFor(adapter, snapshot, now), perVendor = new Map([['active', active]]);
+    for (const [id, entry] of vendorSnapshots) {
+        if (entry?.snapshot)
+            perVendor.set(id, valuesFor(entry.adapter, entry.snapshot, now));
+    }
+    const values = {get(vendor, source) {
+        const set = vendor === 'active' ? active : perVendor.get(vendor);
+        return set?.values.get(source) ?? 0;
+    }};
+    const calendar = calendarCells(heatmap, now);
     const box = new St.BoxLayout({style_class: 'aiusagebar-panel-visual', y_align: Clutter.ActorAlign.CENTER});
     const items = config.customEnabled ? config.items : legacyItems(config);
     for (const item of items) {
-        if (item.type === 'text') box.add_child(textBlock(item, placeholders, values));
+        if (item.type === 'text') box.add_child(textBlock(item, active.placeholders, values));
         else if (item.type === 'ring') box.add_child(ringBlock(item, values, config, theme, calendar));
         else box.add_child(new BlockArea(item, values, config, theme, calendar));
     }
@@ -149,17 +162,17 @@ export function makePanelVisual(adapter, snapshot, now, config, theme, heatmap =
 }
 function legacyItems(config) {
     const layer = (source, mode = 'remaining', tiered = true) =>
-        ({source, mode, color: '#2ec27e', tiered, tierColors: {}, thickness: 2});
+        ({vendor: 'active', source, mode, color: '#2ec27e', tiered, tierColors: {}, thickness: 2});
     if (config.mode === 'heatmap')
         return [{id: 'heatmap', type: 'heatmap', width: 48}];
     if (config.mode === 'bars')
         return [{id: 'bars', type: 'bar', orientation: config.orientation, length: 36, size: 20,
             layers: [layer('session'), layer('weekly')]}];
     return [
-        {id: 'quota', type: 'ring', size: 24,
-            center: {enabled: true, source: config.centerQuota === 'weekly' ? 'weekly' : 'session', mode: 'remaining', fontSize: 8},
+        {id: 'quota', type: 'ring', size: 24, layerGap: .5,
+            center: {enabled: true, vendor: 'active', source: config.centerQuota === 'weekly' ? 'weekly' : 'session', mode: 'remaining', fontSize: 8},
             layers: [layer('session'), layer('weekly')]},
-        ...(config.showResetRings ? [{id: 'reset', type: 'ring', size: 24, center: {enabled: false},
+        ...(config.showResetRings ? [{id: 'reset', type: 'ring', size: 24, layerGap: .5, center: {enabled: false},
             layers: [layer('session_reset', 'remaining', false), layer('weekly_reset', 'remaining', false)]}] : []),
     ];
 }

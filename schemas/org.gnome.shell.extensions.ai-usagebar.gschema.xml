@@ -87,6 +87,11 @@
       <summary>Ordered custom indicator blocks and their layers</summary>
     </key>
 
+    <key name="indicator-source-status" type="s">
+      <default>'{}'</default>
+      <summary>Last runtime status of indicator data sources</summary>
+    </key>
+
     <key name="display-mode" enum="org.gnome.shell.extensions.ai-usagebar.display-mode">
       <default>'number'</default>
       <summary>Panel visualization mode</summary>
