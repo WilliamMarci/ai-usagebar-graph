@@ -4,6 +4,8 @@ A compact and highly configurable GNOME Shell panel extension for monitoring AI 
 
 Repository: [`WilliamMarci/ai-usagebar-graph`](https://github.com/WilliamMarci/ai-usagebar-graph)
 
+<img src="README.assets/image-20260908111334080.png" alt="image-20260908111334080" style="zoom:50%;" />
+
 ## About this fork
 
 This project is forked from [`akitaonrails/ai-usagebar`](https://github.com/akitaonrails/ai-usagebar). It keeps the original extension's lightweight quota-monitoring purpose while expanding the panel indicator, provider support, and preferences substantially.
