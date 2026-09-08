@@ -99,13 +99,16 @@ const BlockArea = GObject.registerClass(class BlockArea extends St.DrawingArea {
         });
     }
     _drawHeatmap(cr, w) {
-        const cells = this._heatmap.slice(-84), base = rgba(this._config.heatmapColor ?? '#2ec27e');
-        const cellW = Math.max(2, Math.floor((w - 11) / 12));
-        for (let i = 0; i < 84; i++) {
+        const cellW = 2, pitch = cellW + 1;
+        const columns = Math.max(1, Math.floor((w + 1) / pitch));
+        const cells = this._heatmap.slice(-columns * 7);
+        const xOffset = Math.max(0, w - (columns * pitch - 1));
+        const base = rgba(this._config.heatmapColor ?? '#2ec27e');
+        for (let i = 0; i < cells.length; i++) {
             const col = Math.floor(i / 7), row = i % 7, level = cells[i]?.intensity ?? 0;
             const color = level === 0 ? rgba(this._config.trackColor ?? '#77767b', .2)
                 : [base[0], base[1], base[2], .2 + .2 * Math.min(4, level)];
-            setColor(cr, color); cr.rectangle(col * (cellW + 1), row * 3, cellW, 2); cr.fill();
+            setColor(cr, color); cr.rectangle(xOffset + col * pitch, row * 3, cellW, 2); cr.fill();
         }
     }
 });
@@ -279,7 +282,9 @@ function calendarCells(contributions, now, weekStart = 'monday') {
     const firstDay = weekStart === 'sunday' ? 0 : 1;
     const weekday = (today.getDay() - firstDay + 7) % 7;
     const end = new Date(today); end.setDate(end.getDate() + 6 - weekday);
-    for (let offset = 83; offset >= 0; offset--) {
+    // Keep enough complete weeks for the widest supported panel block. The
+    // drawing area selects only the trailing columns that fit its allocation.
+    for (let offset = 370; offset >= 0; offset--) {
         const d = new Date(end); d.setDate(d.getDate() - offset);
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         cells.push(d > today ? {date: key, intensity: 0} : (byDate.get(key) ?? {date: key, intensity: 0}));
