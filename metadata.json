@@ -1,10 +1,10 @@
 {
-  "name": "AI Usage Bar",
-  "description": "Monitor the status of Claude, GPT, GLM, and OpenRouter plans/credits - inspired by akitaonrails/ai-usagebar",
+  "name": "AI Usage Bar Graph",
+  "description": "Compact, configurable panel graphs for AI quota usage and reset times",
   "uuid": "ai-usagebar@wilfison",
-  "url": "https://github.com/wilfison/ai-usagebar",
-  "version": 11,
-  "version-name": "1.7.1",
+  "url": "https://github.com/wilfison/ai-usage-bar-graph",
+  "version": 12,
+  "version-name": "1.8.0",
   "settings-schema": "org.gnome.shell.extensions.ai-usagebar",
   "gettext-domain": "ai-usagebar@wilfison",
   "shell-version": [

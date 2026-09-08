@@ -194,13 +194,24 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         resetGroup.add(resetRow);
         page.add(resetGroup);
 
+        const transferGroup = new Adw.PreferencesGroup({
+            title: _('Import / export'),
+            description: _('Back up or restore every extension setting. Exported files may contain API keys.'),
+        });
+        const exportRow = new Adw.ButtonRow({title: _('Export settings'), start_icon_name: 'document-save-symbolic'});
+        exportRow.connect('activated', () => this._exportSettings(settings, exportRow.get_root()));
+        transferGroup.add(exportRow);
+        const importRow = new Adw.ButtonRow({title: _('Import settings'), start_icon_name: 'document-open-symbolic'});
+        importRow.connect('activated', () => this._importSettings(settings, importRow.get_root()));
+        transferGroup.add(importRow);
+        page.add(transferGroup);
+
         return page;
     }
 
     _buildIndicatorPage(settings, cleanups) {
         const page = new Adw.PreferencesPage({title: _('Indicator'), icon_name: 'view-grid-symbolic'});
         const general = new Adw.PreferencesGroup({title: _('Panel indicator')});
-        general.add(this._switchRow(settings, 'indicator-custom-enabled', _('Use custom graphical layout')));
         const boxes = new Gtk.StringList(); [_('Left box'), _('Center box'), _('Right box')].forEach(x => boxes.append(x));
         const box = new Adw.ComboRow({title: _('Panel box'), model: boxes});
         const boxIds = ['left', 'center', 'right']; box.selected = Math.max(0, boxIds.indexOf(settings.get_string('indicator-panel-box')));
@@ -213,6 +224,11 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         general.add(this._spinSettingRow(settings, 'indicator-label-font-size', _('Leading label font size'), 6, 28));
         general.add(this._colorRow(settings, 'visual-track-color', _('Track color'), '#5e5c64', cleanups));
         general.add(this._colorRow(settings, 'heatmap-color', _('Heatmap color'), '#2ec27e', cleanups));
+        const weekStart = new Gtk.StringList(); [_('Monday'), _('Sunday')].forEach(x => weekStart.append(x));
+        const weekRow = new Adw.ComboRow({title: _('Heatmap first row'), model: weekStart,
+            selected: settings.get_string('heatmap-week-start') === 'sunday' ? 1 : 0});
+        weekRow.connect('notify::selected', () => settings.set_string('heatmap-week-start', weekRow.selected === 1 ? 'sunday' : 'monday'));
+        general.add(weekRow);
         page.add(general);
 
         const status = new Adw.PreferencesGroup({title: _('Data source status')});
@@ -224,7 +240,7 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
 
         const layout = new Adw.PreferencesGroup({
             title: _('Ordered blocks'),
-            description: _('Build the panel from any number of rings, bars, text blocks, and heatmaps. Changes redraw only when settings or quota data change.'),
+            description: _('Build any number of rings, bars, text blocks, and heatmaps. Text fields support {5h_quota}, {1w_quota}, {5h_used}, {1w_used}, vendor-prefixed fields, and {value} where shown.'),
         });
         page.add(layout);
         this._rebuildLayoutEditor(settings, layout);
@@ -341,6 +357,13 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
                     defaultTheme()[{low: 'green', mid: 'yellow', high: 'orange', critical: 'red'}[key]],
                     v => { layer.tierColors[key] = v; save(); }));
             lr.add_row(this._valueSpin(_('Thickness'), layer.thickness, 1, 6, v => { layer.thickness = v; save(); }));
+            if (item.type === 'ring') {
+                const marker = new Adw.SwitchRow({title: _('Show position dot'), active: layer.markerEnabled});
+                marker.connect('notify::active', () => { layer.markerEnabled = marker.active; save(); });
+                lr.add_row(marker);
+                lr.add_row(this._layoutColorRow(_('Position dot color (empty = layer)'), layer.markerColor, layer.color,
+                    v => { layer.markerColor = v; save(); }));
+            }
             lr.add_row(this._valueEntry(_('Small label ({value} = displayed value)'), layer.label,
                 v => { layer.label = v; save(); }));
             lr.add_row(this._valueCombo(_('Label position'), [_('End / bottom'), _('Start / top')],
@@ -351,7 +374,7 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         });
         const add = new Adw.ButtonRow({title: _('Add layer'), start_icon_name: 'list-add-symbolic'});
         add.connect('activated', () => { item.layers.push({vendor: 'active', source: 'session', mode: 'remaining', color: '#2ec27e', tiered: true,
-            tierColors: {low: '', mid: '', high: '', critical: ''}, thickness: 2}); structural(); });
+            tierColors: {low: '', mid: '', high: '', critical: ''}, thickness: 2, markerEnabled: false, markerColor: ''}); structural(); });
         row.add_row(add);
     }
 
@@ -705,5 +728,55 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         const row = new Adw.PasswordEntryRow({title});
         settings.bind(key, row, 'text', Gio.SettingsBindFlags.DEFAULT);
         return row;
+    }
+
+    _exportSettings(settings, parent) {
+        const dialog = new Gtk.FileDialog({title: _('Export settings'), initial_name: 'ai-usage-bar-graph-settings.json'});
+        dialog.save(parent, null, (_dialog, result) => {
+            try {
+                const file = dialog.save_finish(result);
+                if (!file) return;
+                const values = {};
+                for (const key of settings.list_keys())
+                    values[key] = settings.get_value(key).deepUnpack();
+                const bytes = new TextEncoder().encode(JSON.stringify({format: 'ai-usage-bar-graph-settings', version: 1, settings: values}, null, 2));
+                file.replace_contents(bytes, null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, null);
+            } catch (error) {
+                this._showMessage(parent, _('Export failed'), error.message);
+            }
+        });
+    }
+
+    _importSettings(settings, parent) {
+        const dialog = new Gtk.FileDialog({title: _('Import settings')});
+        dialog.open(parent, null, (_dialog, result) => {
+            try {
+                const file = dialog.open_finish(result);
+                if (!file) return;
+                const [, contents] = file.load_contents(null);
+                const data = JSON.parse(new TextDecoder().decode(contents));
+                if (data?.format !== 'ai-usage-bar-graph-settings' || typeof data.settings !== 'object')
+                    throw new Error(_('This is not an AI Usage Bar Graph settings file.'));
+                const valid = new Set(settings.list_keys());
+                settings.delay();
+                for (const [key, value] of Object.entries(data.settings)) {
+                    if (!valid.has(key)) continue;
+                    const type = settings.get_value(key).get_type_string();
+                    if (type === 's' && typeof value === 'string') settings.set_string(key, value);
+                    else if (type === 'b' && typeof value === 'boolean') settings.set_boolean(key, value);
+                    else if (type === 'i' && Number.isInteger(value)) settings.set_int(key, value);
+                }
+                settings.apply();
+                this._showMessage(parent, _('Settings imported'), _('The restored settings are now active.'));
+            } catch (error) {
+                this._showMessage(parent, _('Import failed'), error.message);
+            }
+        });
+    }
+
+    _showMessage(parent, heading, body) {
+        const dialog = new Adw.AlertDialog({heading, body});
+        dialog.add_response('ok', _('OK'));
+        dialog.present(parent);
     }
 }

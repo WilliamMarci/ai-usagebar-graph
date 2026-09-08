@@ -65,7 +65,13 @@ const BlockArea = GObject.registerClass(class BlockArea extends St.DrawingArea {
             setColor(cr, rgba(this._config.trackColor ?? '#77767b', .35));
             cr.arc(cx, cy, radius, 0, Math.PI * 2); cr.stroke();
             setColor(cr, rgba(this._layerColor(layer)));
-            cr.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp(this._fraction(layer)) / 100); cr.stroke();
+            const end = -Math.PI / 2 + Math.PI * 2 * clamp(this._fraction(layer)) / 100;
+            cr.arc(cx, cy, radius, -Math.PI / 2, end); cr.stroke();
+            if (layer.markerEnabled) {
+                setColor(cr, rgba(layer.markerColor || this._layerColor(layer)));
+                cr.arc(cx + radius * Math.cos(end), cy + radius * Math.sin(end), thickness / 2, 0, Math.PI * 2);
+                cr.fill();
+            }
             radius -= thickness / 2 + (this._item.layerGap ?? .5) + (layers[i + 1]?.thickness ?? 0) / 2;
         });
     }
@@ -90,15 +96,6 @@ const BlockArea = GObject.registerClass(class BlockArea extends St.DrawingArea {
                     roundedRect(cr, 0, y, w * fraction, thickness, thickness / 2); cr.fill();
                 }
             }
-            if (layer.label) {
-                const text = layer.label.replace('{value}', String(Math.round(this._fraction(layer))));
-                cr.selectFontFace('Sans', 0, 0); cr.setFontSize(layer.labelFontSize);
-                setColor(cr, rgba('#ffffff', .9));
-                const ext = cr.textExtents(text);
-                const x = vertical ? i * (thickness + gap) : (layer.labelPosition === 'start' ? 1 : Math.max(1, w - ext.width - 1));
-                const y = vertical ? (layer.labelPosition === 'start' ? layer.labelFontSize : h - 1) : i * (thickness + gap) + thickness;
-                cr.moveTo(x, y); cr.showText(text);
-            }
         });
     }
     _drawHeatmap(cr, w) {
@@ -107,7 +104,7 @@ const BlockArea = GObject.registerClass(class BlockArea extends St.DrawingArea {
         for (let i = 0; i < 84; i++) {
             const col = Math.floor(i / 7), row = i % 7, level = cells[i]?.intensity ?? 0;
             const color = level === 0 ? rgba(this._config.trackColor ?? '#77767b', .2)
-                : [base[0], base[1], base[2], .25 + .1875 * Math.min(4, level)];
+                : [base[0], base[1], base[2], .2 + .2 * Math.min(4, level)];
             setColor(cr, color); cr.rectangle(col * (cellW + 1), row * 3, cellW, 2); cr.fill();
         }
     }
@@ -137,7 +134,7 @@ function valueFor(data, vendor, source, mode) {
     const value = data.get(vendor, source);
     return Math.round(mode === 'used' ? value : 100 - value);
 }
-function textBlock(item, placeholders, values) {
+function templateValues(placeholders, values) {
     const derived = new Map(placeholders);
     for (const vendor of ['active', 'anthropic', 'openai', 'zai', 'openrouter', 'deepseek', 'kimi', 'opencode']) {
         for (const source of ['session', 'weekly', 'monthly', 'session_reset', 'weekly_reset', 'monthly_reset', 'peak']) {
@@ -146,7 +143,21 @@ function textBlock(item, placeholders, values) {
             derived.set(`${prefix}_remaining`, String(valueFor(values, vendor, source, 'remaining')));
         }
     }
-    const render = template => template.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, key) => derived.has(key) ? derived.get(key) : match);
+    for (const [alias, source] of [['5h', 'session'], ['1w', 'weekly'], ['1m', 'monthly']]) {
+        derived.set(`${alias}_quota`, derived.get(`${source}_remaining`));
+        derived.set(`${alias}_quote`, derived.get(`${source}_remaining`));
+        derived.set(`${alias}_used`, derived.get(`${source}_used`));
+        derived.set(`${alias}_remaining`, derived.get(`${source}_remaining`));
+    }
+    return derived;
+}
+function renderTemplate(template, fields) {
+    return String(template ?? '').replace(/\{([a-zA-Z0-9_]+)\}/g,
+        (match, key) => fields.has(key) ? fields.get(key) : match);
+}
+function textBlock(item, placeholders, values) {
+    const derived = templateValues(placeholders, values);
+    const render = template => renderTemplate(template, derived);
     const box = new St.BoxLayout({vertical: true, y_align: Clutter.ActorAlign.CENTER, style_class: 'aiusagebar-text-stack'});
     const top = new St.Label({text: render(item.template)});
     top.set_style(`font-size: ${item.fontSize}px;${item.color ? ` color: ${item.color};` : ''}`);
@@ -173,7 +184,7 @@ function formatRemainingTime(resetAt, now, template) {
         .replaceAll('{ss}', String(s).padStart(2, '0'))
         .replaceAll('{compact}', compact);
 }
-function ringBlock(item, values, config, theme, heatmap, now) {
+function ringBlock(item, placeholders, values, config, theme, heatmap, now) {
     if (!item.center?.enabled)
         return new BlockArea(item, values, config, theme, heatmap);
     const overlay = new St.Widget({layout_manager: new Clutter.BinLayout(), width: item.size, height: item.size});
@@ -183,12 +194,33 @@ function ringBlock(item, values, config, theme, heatmap, now) {
     const value = isTime
         ? formatRemainingTime(resetAt, now, item.center.timeFormat)
         : String(valueFor(values, item.center.vendor, item.center.source, item.center.mode));
-    const text = item.center.template ? item.center.template.replace('{value}', value) : value;
+    const fields = templateValues(placeholders, values);
+    fields.set('value', value);
+    const text = item.center.template ? renderTemplate(item.center.template, fields) : value;
     const label = new St.Label({text,
         x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER});
     label.set_style(`font-size: ${item.center.fontSize}px; font-family: monospace; font-weight: 600;`);
     overlay.add_child(label);
     return overlay;
+}
+function barBlock(item, values, config, theme, heatmap) {
+    const vertical = item.orientation === 'vertical';
+    const box = new St.BoxLayout({vertical: !vertical, y_align: Clutter.ActorAlign.CENTER,
+        style: `spacing: ${Math.max(0, item.layerGap ?? 0)}px;`});
+    for (const layer of item.layers) {
+        const line = new St.BoxLayout({vertical, y_align: Clutter.ActorAlign.CENTER, style: 'spacing: 2px;'});
+        const label = layer.label ? new St.Label({
+            text: layer.label.replace('{value}', String(valueFor(values, layer.vendor, layer.source, layer.mode))),
+            y_align: Clutter.ActorAlign.CENTER,
+        }) : null;
+        if (label)
+            label.set_style(`font-size: ${layer.labelFontSize}px;`);
+        if (label && layer.labelPosition === 'start') line.add_child(label);
+        line.add_child(new BlockArea({...item, layers: [layer], layerGap: 0}, values, config, theme, heatmap));
+        if (label && layer.labelPosition !== 'start') line.add_child(label);
+        box.add_child(line);
+    }
+    return box;
 }
 function timerBlock(item, values, now) {
     const source = item.source.endsWith('_reset') ? item.source : `${item.source}_reset`;
@@ -212,13 +244,14 @@ export function makePanelVisual(adapter, snapshot, now, config, theme, heatmap =
         const set = vendor === 'active' ? active : perVendor.get(vendor);
         return set?.values.get(source) ?? 0;
     }};
-    const calendar = calendarCells(heatmap, now);
+    const calendar = calendarCells(heatmap, now, config.heatmapWeekStart);
     const box = new St.BoxLayout({style_class: 'aiusagebar-panel-visual', y_align: Clutter.ActorAlign.CENTER});
     const items = config.customEnabled ? config.items : legacyItems(config);
     for (const item of items) {
         if (item.type === 'text') box.add_child(textBlock(item, active.placeholders, values));
-        else if (item.type === 'ring') box.add_child(ringBlock(item, values, config, theme, calendar, now));
+        else if (item.type === 'ring') box.add_child(ringBlock(item, active.placeholders, values, config, theme, calendar, now));
         else if (item.type === 'timer') box.add_child(timerBlock(item, values, now));
+        else if (item.type === 'bar') box.add_child(barBlock(item, values, config, theme, calendar));
         else box.add_child(new BlockArea(item, values, config, theme, calendar));
     }
     return box;
@@ -240,13 +273,16 @@ function legacyItems(config) {
             layers: [layer('session_reset', 'remaining', false), layer('weekly_reset', 'remaining', false)]}] : []),
     ];
 }
-function calendarCells(contributions, now) {
+function calendarCells(contributions, now, weekStart = 'monday') {
     const byDate = new Map(contributions.map(x => [x.date, x])), cells = [];
-    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const firstDay = weekStart === 'sunday' ? 0 : 1;
+    const weekday = (today.getDay() - firstDay + 7) % 7;
+    const end = new Date(today); end.setDate(end.getDate() + 6 - weekday);
     for (let offset = 83; offset >= 0; offset--) {
         const d = new Date(end); d.setDate(d.getDate() - offset);
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        cells.push(byDate.get(key) ?? {date: key, intensity: 0});
+        cells.push(d > today ? {date: key, intensity: 0} : (byDate.get(key) ?? {date: key, intensity: 0}));
     }
     return cells;
 }

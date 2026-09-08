@@ -51,17 +51,17 @@
     </key>
 
     <key name="indicator-label-enabled" type="b">
-      <default>true</default>
+      <default>false</default>
       <summary>Show the leading indicator label</summary>
     </key>
 
     <key name="indicator-custom-enabled" type="b">
-      <default>false</default>
+      <default>true</default>
       <summary>Use the custom graphical indicator layout</summary>
     </key>
 
     <key name="indicator-panel-box" type="s">
-      <default>'right'</default>
+      <default>'center'</default>
       <summary>Panel box containing the indicator</summary>
     </key>
 
@@ -72,18 +72,18 @@
     </key>
 
     <key name="indicator-label-text" type="s">
-      <default>'{vendor_short}'</default>
+      <default>'Codex '</default>
       <summary>Template used by the leading indicator label</summary>
     </key>
 
     <key name="indicator-label-font-size" type="i">
-      <default>14</default>
+      <default>11</default>
       <range min="6" max="28"/>
       <summary>Leading indicator label font size</summary>
     </key>
 
     <key name="indicator-items-json" type="s">
-      <default>''</default>
+      <default>'[{"id":"reset","type":"ring","size":24,"layerGap":1,"layers":[{"vendor":"active","source":"session","mode":"remaining","color":"#2ec27e","tiered":true,"tierColors":{"low":"","mid":"","high":"","critical":""},"thickness":2},{"vendor":"active","source":"weekly","mode":"remaining","color":"#26a269","tiered":true,"tierColors":{"low":"#26a269","mid":"","high":"#c64600","critical":"#a51d2d"},"thickness":2}],"center":{"enabled":false,"vendor":"active","source":"weekly","mode":"remaining","fontSize":10,"template":"{value}","timeFormat":"{h}:{mm}"}},{"id":"reset-time","type":"ring","size":24,"layerGap":1,"layers":[{"vendor":"active","source":"session_reset","mode":"remaining","color":"#9a9996","tiered":false,"thickness":2},{"vendor":"active","source":"weekly_reset","mode":"remaining","color":"#77767b","tiered":false,"thickness":2}],"center":{"enabled":false,"vendor":"active","source":"session_reset","mode":"remaining","fontSize":9,"template":"","timeFormat":"{h}:{mm}"}}]'</default>
       <summary>Ordered custom indicator blocks and their layers</summary>
     </key>
 
@@ -121,13 +121,18 @@
     </key>
 
     <key name="visual-track-color" type="s">
-      <default>''</default>
+      <default>'#5e5c64'</default>
       <summary>Track color override for panel visualizations</summary>
     </key>
 
     <key name="heatmap-color" type="s">
-      <default>''</default>
+      <default>'#1c71d8'</default>
       <summary>Theme color used by the usage heatmap</summary>
+    </key>
+
+    <key name="heatmap-week-start" type="s">
+      <default>'monday'</default>
+      <summary>First weekday row in the heatmap</summary>
     </key>
 
     <key name="tooltip-format" type="s">
