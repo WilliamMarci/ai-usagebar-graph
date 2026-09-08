@@ -1,0 +1,20 @@
+/tmp
+/docs
+/tasks
+*.compiled
+*.shell-extension.zip
+
+# Compiled gettext catalogs are build artifacts; the po/*.po sources are tracked.
+locale/**/*.mo
+
+# Node dev tooling (eslint only); the lockfile IS committed.
+node_modules/
+
+# Local secrets — never commit
+*.credentials.json
+
+# Claude Code local scratch state.
+.claude/
+
+# Sandbox marker, not part of the project.
+.ai-jail
