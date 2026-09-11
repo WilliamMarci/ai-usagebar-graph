@@ -104,6 +104,20 @@ describe('fetchSnapshot (deepseek)', () => {
         assertEqual(r.snapshot.balance, 3);
         assertEqual(r.lastError.code, 401);
     }));
+
+    it('reports the official API error message', withTemp(({cache}) => {
+        const http = httpStub(res(401, '{"error":{"message":"Authentication Fails"}}'));
+        const r = runSync(fetchSnapshot({cache, http, apiKey: 'bad'}));
+        assertEqual(r.ok, false);
+        assertEqual(r.message, 'DeepSeek balance request failed (HTTP 401): Authentication Fails');
+    }));
+
+    it('does not cache malformed HTTP 200 payloads', withTemp(({cache}) => {
+        const http = httpStub(res(200, '{"unexpected":true}'));
+        const r = runSync(fetchSnapshot({cache, http, apiKey: 'sk-test'}));
+        assertEqual(r.ok, false);
+        assertEqual(r.message, 'DeepSeek balance response is missing is_available or balance_infos');
+    }));
 });
 
 system.exit(summary());

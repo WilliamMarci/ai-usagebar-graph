@@ -19,6 +19,7 @@ describe('parseBalance', () => {
         assertEqual(s.isAvailable, true);
         assertEqual(s.currency, 'USD');
         assertEqual(s.balance, 1.5);
+        assertEqual(s.balances.length, 2);
     });
 
     it('falls back to CNY when no USD', () => {
@@ -35,6 +36,12 @@ describe('parseBalance', () => {
         assertEqual(s.isAvailable, false);
         assertEqual(s.balance, 0);
         assertEqual(s.currency, '');
+    });
+
+    it('rejects a malformed successful response', () => {
+        let message = '';
+        try { parseBalance('{"unexpected":true}'); } catch (error) { message = error.message; }
+        assertEqual(message, 'DeepSeek balance response is missing is_available or balance_infos');
     });
 });
 
