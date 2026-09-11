@@ -619,10 +619,15 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
 
     _buildOpenCodeGroup(settings) {
         const group = new Adw.PreferencesGroup({
-            title: _('OpenCode Go'),
-            description: _('Reads rolling, weekly, and monthly quota from the OpenCode Go usage endpoint.'),
+            title: _('OpenCode'),
+            description: _('Go exposes subscription quota through the official usage API. Zen is pay-as-you-go and currently exposes no API-key balance endpoint.'),
         });
         group.add(this._switchRow(settings, 'opencode-enabled', _('Enabled')));
+        const plans = new Gtk.StringList(); [_('OpenCode Go'), _('OpenCode Zen')].forEach(x => plans.append(x));
+        const plan = new Adw.ComboRow({title: _('Product'), model: plans,
+            selected: settings.get_string('opencode-plan') === 'zen' ? 1 : 0});
+        plan.connect('notify::selected', () => settings.set_string('opencode-plan', plan.selected === 1 ? 'zen' : 'go'));
+        group.add(plan);
         group.add(this._entryRow(settings, 'opencode-base-url', _('API base URL')));
         group.add(this._entryRow(settings, 'opencode-api-key-env', _('API key env var')));
         group.add(this._passwordRow(settings, 'opencode-api-key', _('API key (inline)')));

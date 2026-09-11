@@ -37,6 +37,7 @@ describe('readConfig — schema defaults', () => {
     it('anthropic enabled by default', () => assertEqual(cfg.vendors.anthropic.enabled, true));
     it('anthropic creds path unset → null', () => assertEqual(cfg.vendors.anthropic.credentialsPath, null));
     it('deepseek disabled by default', () => assertEqual(cfg.vendors.deepseek.enabled, false));
+    it('OpenCode defaults to the Go product', () => assertEqual(cfg.vendors.opencode.plan, 'go'));
     it('zai env var name default', () => assertEqual(cfg.vendors.zai.apiKeyEnv, 'ZAI_API_KEY'));
     it('openai admin env default', () => assertEqual(cfg.vendors.openai.adminKeyEnv, 'OPENAI_ADMIN_KEY'));
     it('tooltip format unset → null', () => assertEqual(cfg.tooltipFormat, null));
@@ -81,7 +82,9 @@ describe('readConfig — overrides', () => {
     settings.set_boolean('deepseek-enabled', true);
     settings.set_boolean('notify-enabled', true);
     settings.set_int('notify-threshold', 75);
+    settings.set_string('opencode-plan', 'zen');
     const cfg = readConfig(settings);
+    it('honors the OpenCode product override', () => assertEqual(cfg.vendors.opencode.plan, 'zen'));
     it('honors the creds-path override', () =>
         assertEqual(cfg.vendors.anthropic.credentialsPath, '/tmp/x.json'));
     it('anthropicCredsPath uses the override', () =>

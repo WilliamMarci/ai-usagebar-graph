@@ -17,7 +17,7 @@ The main changes in this fork are:
 - Compact single- and double-line text with quota placeholders and provider-prefixed fields
 - Low-overhead, width-responsive heatmaps with Monday/Sunday alignment and usage intensity shades
 - Placement in GNOME Shell's left, center, or right panel box, including Dash to Panel layouts
-- Anthropic, OpenAI/Codex, Z.AI, OpenRouter, DeepSeek, Kimi, and OpenCode support
+- Anthropic, OpenAI/Codex, Z.AI, OpenRouter, DeepSeek, Kimi, and distinct OpenCode Go/Zen configuration
 - OpenCode quota discovery inspired by [TokScale](https://github.com/junhoyeo/tokscale), plus an optional OpenCode aggregate source for DeepSeek
 - Provider connection diagnostics, unsupported-source warnings, configurable reset countdowns, and settings import/export
 
@@ -51,6 +51,8 @@ Open the extension preferences and use:
 Text fields support placeholders such as `{5h_quota}`, `{1w_quota}`, `{5h_used}`, `{1w_used}`, `{session_remaining}`, and provider-prefixed forms such as `{openai_weekly_remaining}`. The misspelled aliases `{5h_quote}` and `{1w_quote}` are also accepted for compatibility.
 
 Settings exports are plain JSON and may contain inline API keys. Treat exported files as secrets.
+
+OpenCode Go quota is queried directly from the official authenticated `GET /zen/go/v1/usage` JSON endpoint. OpenCode Zen is a separate pay-as-you-go product; OpenCode currently provides no API-key endpoint for its credit balance, so the extension reports that limitation instead of showing Go quota data under the Zen name.
 
 ## Privacy and network behavior
 

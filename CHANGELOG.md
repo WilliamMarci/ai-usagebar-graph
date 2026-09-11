@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.1] - 2026-09-11
+
+### Added
+
+- OpenCode settings now distinguish the Go subscription from the Zen
+  pay-as-you-go product.
+
+### Changed
+
+- OpenCode Go usage is fetched directly from the official authenticated
+  `GET /zen/go/v1/usage` JSON endpoint instead of preferring TokScale.
+- DeepSeek's optional OpenCode source uses the same official Go endpoint.
+
+### Fixed
+
+- OpenCode API errors now include the server-provided reason, and stale or
+  incompatible cache data no longer prevents a live query after switching
+  providers.
+- Selecting OpenCode Zen no longer presents Go quota as Zen usage. The UI
+  explains that Zen currently has no API-key balance endpoint.
+
 ## [1.2.1] - 2026-07-17
 
 ### Added

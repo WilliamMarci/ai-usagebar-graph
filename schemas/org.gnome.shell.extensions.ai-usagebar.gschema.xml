@@ -299,7 +299,12 @@
 
     <key name="opencode-enabled" type="b">
       <default>false</default>
-      <summary>Enable OpenCode Go</summary>
+      <summary>Enable OpenCode</summary>
+    </key>
+
+    <key name="opencode-plan" type="s">
+      <default>'go'</default>
+      <summary>OpenCode product: Go subscription or Zen pay-as-you-go</summary>
     </key>
 
     <key name="opencode-api-key-env" type="s">
