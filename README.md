@@ -56,8 +56,10 @@ OpenCode Go quota is queried directly from the official authenticated `GET /zen/
 
 Google support follows the current Antigravity CLI quota model. For personal
 free, Google AI Pro, and Ultra accounts, sign in with Antigravity CLI; the
-extension reads its token from the system keyring and queries grouped five-hour
-and weekly quota. Gemini Code Assist Standard and Enterprise accounts retain a
+extension first reads grouped five-hour and weekly quota from Antigravity's
+CSRF-protected local service. Stale local sessions are ignored automatically;
+the saved system-keyring session is used only when no local service is running.
+Gemini Code Assist Standard and Enterprise accounts retain a
 legacy Gemini CLI compatibility path. When Google supplies it, the popup also
 shows the unconverted **AI credits** value. Google AI Studio API keys still do
 not expose a public cash-balance endpoint. An explicit OAuth access-token

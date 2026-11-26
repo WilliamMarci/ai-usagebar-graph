@@ -37,6 +37,12 @@ describe('Google Code Assist quota parser', () => {
         assertEqual(s.weekly.modelId, 'Flash weekly');
         assertEqual(s.weekly.utilizationPct, 40);
     });
+    it('treats an omitted proto3 zero fraction as exhausted', () => {
+        const s = parseUsage(JSON.stringify({response: {groups: [{displayName: 'Gemini', buckets: [
+            {displayName: 'Five hour', window: '18000s', resetTime: '2026-11-27T00:00:00Z'},
+        ]}]}}));
+        assertEqual(s.session.utilizationPct, 100);
+    });
 });
 
 system.exit(summary());

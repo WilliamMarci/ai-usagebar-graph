@@ -3,8 +3,8 @@
   "description": "Compact, configurable panel graphs for AI quota usage and reset times",
   "uuid": "ai-usagebar@wilfison",
   "url": "https://github.com/WilliamMarci/ai-usagebar-graph",
-  "version": 15,
-  "version-name": "1.9.1",
+  "version": 16,
+  "version-name": "1.9.2",
   "settings-schema": "org.gnome.shell.extensions.ai-usagebar",
   "gettext-domain": "ai-usagebar@wilfison",
   "shell-version": [

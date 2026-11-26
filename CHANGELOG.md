@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.2] - 2026-11-26
+
+### Fixed
+
+- Antigravity quota now comes first from its running local language server,
+  using the current hub descriptor and CSRF token. This avoids sending a stale
+  legacy Gemini OAuth token to the new backend and receiving HTTP 401.
+- Stale `hub_*.json` descriptors are skipped automatically, and proto3's
+  omitted zero `remainingFraction` is correctly displayed as exhausted quota.
+
 ## [1.9.1] - 2026-11-26
 
 ### Changed
