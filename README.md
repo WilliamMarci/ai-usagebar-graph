@@ -17,7 +17,7 @@ The main changes in this fork are:
 - Compact single- and double-line text with quota placeholders and provider-prefixed fields
 - Low-overhead, width-responsive heatmaps with Monday/Sunday alignment and usage intensity shades
 - Placement in GNOME Shell's left, center, or right panel box, including Dash to Panel layouts
-- Anthropic, OpenAI/Codex, Z.AI, OpenRouter, DeepSeek, Kimi, and distinct OpenCode Go/Zen configuration
+- Anthropic, OpenAI/Codex, Z.AI, OpenRouter, DeepSeek, Kimi, Google Gemini, and distinct OpenCode Go/Zen configuration
 - OpenCode quota discovery inspired by [TokScale](https://github.com/junhoyeo/tokscale), plus an optional OpenCode aggregate source for DeepSeek
 - Provider connection diagnostics, unsupported-source warnings, configurable reset countdowns, and settings import/export
 
@@ -54,6 +54,14 @@ Settings exports are plain JSON and may contain inline API keys. Treat exported 
 
 OpenCode Go quota is queried directly from the official authenticated `GET /zen/go/v1/usage` JSON endpoint. OpenCode Zen is a separate pay-as-you-go product; OpenCode currently provides no API-key endpoint for its credit balance, so the extension reports that limitation instead of showing Go quota data under the Zen name.
 
+Google support queries the same Code Assist quota service used by the official
+open-source Gemini CLI. It shows model request quota and, when Google supplies
+it, an unconverted **AI credits** value. Google AI Studio API keys do not expose
+a public cash-balance endpoint; AI Studio usage remains available in its web
+dashboard. Authenticate with Gemini CLI or provide an OAuth access token via
+the configured environment variable. The underlying Code Assist endpoint is
+not a stable public billing API and may change with Gemini CLI releases.
+
 ## Privacy and network behavior
 
 Credentials stay in GNOME settings or in their configured files/environment variables. The extension sends credentials only to the endpoint of the provider being queried. Refreshes are intentionally infrequent to minimize panel overhead and network traffic.
@@ -77,3 +85,4 @@ Issues and pull requests are welcome. Keep changes focused, preserve the compact
 
 - [`akitaonrails/ai-usagebar`](https://github.com/akitaonrails/ai-usagebar) — original project and foundation
 - [`junhoyeo/tokscale`](https://github.com/junhoyeo/tokscale) — reference for OpenCode usage discovery
+- [`google-gemini/gemini-cli`](https://github.com/google-gemini/gemini-cli) — reference implementation for Google Code Assist quota retrieval

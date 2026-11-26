@@ -8,6 +8,7 @@
     <value nick="deepseek" value="4"/>
     <value nick="kimi" value="5"/>
     <value nick="opencode" value="6"/>
+    <value nick="google" value="7"/>
   </enum>
 
   <enum id="org.gnome.shell.extensions.ai-usagebar.display-mode">
@@ -320,6 +321,28 @@
     <key name="opencode-base-url" type="s">
       <default>'https://opencode.ai'</default>
       <summary>OpenCode API base URL</summary>
+    </key>
+
+    <key name="google-enabled" type="b">
+      <default>false</default>
+      <summary>Enable Google Gemini</summary>
+    </key>
+
+    <key name="google-credentials-path" type="s">
+      <default>''</default>
+      <summary>Gemini CLI OAuth credentials path</summary>
+      <description>Empty uses ~/.gemini/oauth_creds.json.</description>
+    </key>
+
+    <key name="google-access-token-env" type="s">
+      <default>'GEMINI_OAUTH_ACCESS_TOKEN'</default>
+      <summary>Environment variable containing a Google OAuth access token</summary>
+    </key>
+
+    <key name="google-project-id" type="s">
+      <default>''</default>
+      <summary>Google Code Assist project ID</summary>
+      <description>Empty attempts discovery through loadCodeAssist.</description>
     </key>
 
   </schema>

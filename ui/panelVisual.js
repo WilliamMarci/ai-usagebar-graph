@@ -139,7 +139,7 @@ function valueFor(data, vendor, source, mode) {
 }
 function templateValues(placeholders, values) {
     const derived = new Map(placeholders);
-    for (const vendor of ['active', 'anthropic', 'openai', 'zai', 'openrouter', 'deepseek', 'kimi', 'opencode']) {
+    for (const vendor of ['active', 'anthropic', 'openai', 'zai', 'openrouter', 'deepseek', 'kimi', 'opencode', 'google']) {
         for (const source of ['session', 'weekly', 'monthly', 'session_reset', 'weekly_reset', 'monthly_reset', 'peak']) {
             const prefix = vendor === 'active' ? source : `${vendor}_${source}`;
             derived.set(`${prefix}_used`, String(valueFor(values, vendor, source, 'used')));

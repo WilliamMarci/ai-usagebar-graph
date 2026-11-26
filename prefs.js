@@ -536,6 +536,7 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         page.add(this._buildDeepSeekGroup(settings));
         page.add(this._buildKimiGroup(settings));
         page.add(this._buildOpenCodeGroup(settings));
+        page.add(this._buildGoogleGroup(settings));
         return page;
     }
 
@@ -632,6 +633,19 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
         group.add(this._entryRow(settings, 'opencode-api-key-env', _('API key env var')));
         group.add(this._passwordRow(settings, 'opencode-api-key', _('API key (inline)')));
         group.add(this._testProviderRow(settings, 'opencode'));
+        return group;
+    }
+
+    _buildGoogleGroup(settings) {
+        const group = new Adw.PreferencesGroup({
+            title: _('Google Gemini'),
+            description: _('Shows Gemini CLI / Code Assist model quota and AI credits when available. Google AI Studio does not expose an API-key cash-balance endpoint.'),
+        });
+        group.add(this._switchRow(settings, 'google-enabled', _('Enabled')));
+        group.add(this._entryRow(settings, 'google-credentials-path', _('OAuth credentials path')));
+        group.add(this._entryRow(settings, 'google-access-token-env', _('OAuth access-token env var')));
+        group.add(this._entryRow(settings, 'google-project-id', _('Code Assist project ID (empty = discover)')));
+        group.add(this._testProviderRow(settings, 'google'));
         return group;
     }
 

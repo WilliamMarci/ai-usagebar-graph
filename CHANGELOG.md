@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-11-26
+
+### Added
+
+- Google Gemini CLI / Code Assist provider using Google's quota service. It
+  displays per-model request quota, reset times, and AI credits when returned.
+- Google credentials may come from `GEMINI_OAUTH_ACCESS_TOKEN` or Gemini CLI's
+  `~/.gemini/oauth_creds.json`; the Code Assist project can be configured or
+  discovered automatically.
+
+### Documentation
+
+- Clarified that Google AI Studio exposes usage in its dashboard but has no
+  public API-key cash-balance endpoint. The extension therefore labels Code
+  Assist credits as AI credits, not currency.
+
 ## [1.8.1] - 2026-09-11
 
 ### Added

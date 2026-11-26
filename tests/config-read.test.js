@@ -38,6 +38,10 @@ describe('readConfig — schema defaults', () => {
     it('anthropic creds path unset → null', () => assertEqual(cfg.vendors.anthropic.credentialsPath, null));
     it('deepseek disabled by default', () => assertEqual(cfg.vendors.deepseek.enabled, false));
     it('OpenCode defaults to the Go product', () => assertEqual(cfg.vendors.opencode.plan, 'go'));
+    it('Google is disabled by default', () => assertEqual(cfg.vendors.google.enabled, false));
+    it('Google token env has a useful default', () =>
+        assertEqual(cfg.vendors.google.accessTokenEnv, 'GEMINI_OAUTH_ACCESS_TOKEN'));
+    it('Google project discovery is enabled by default', () => assertEqual(cfg.vendors.google.projectId, null));
     it('zai env var name default', () => assertEqual(cfg.vendors.zai.apiKeyEnv, 'ZAI_API_KEY'));
     it('openai admin env default', () => assertEqual(cfg.vendors.openai.adminKeyEnv, 'OPENAI_ADMIN_KEY'));
     it('tooltip format unset → null', () => assertEqual(cfg.tooltipFormat, null));
