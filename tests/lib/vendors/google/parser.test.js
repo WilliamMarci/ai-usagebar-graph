@@ -27,6 +27,16 @@ describe('Google Code Assist quota parser', () => {
     });
     it('uses the most consumed bucket for severity', () =>
         assertEqual(peakUsage(parseUsage(LIVE)).percent, 75));
+    it('maps Antigravity 5h and weekly summary buckets to shared sources', () => {
+        const s = parseUsage(JSON.stringify({buckets: [
+            {bucketId: 'flash-weekly', displayName: 'Flash weekly', window: '604800s', remainingFraction: 0.6},
+            {bucketId: 'all-5h', displayName: 'All models 5h', window: {seconds: 18000}, remainingFraction: 0.2},
+        ]}));
+        assertEqual(s.session.modelId, 'All models 5h');
+        assertEqual(s.session.utilizationPct, 80);
+        assertEqual(s.weekly.modelId, 'Flash weekly');
+        assertEqual(s.weekly.utilizationPct, 40);
+    });
 });
 
 system.exit(summary());

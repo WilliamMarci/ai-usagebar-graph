@@ -639,10 +639,10 @@ export default class AiUsagebarPreferences extends ExtensionPreferences {
     _buildGoogleGroup(settings) {
         const group = new Adw.PreferencesGroup({
             title: _('Google Gemini'),
-            description: _('Shows Gemini CLI / Code Assist model quota and AI credits when available. Google AI Studio does not expose an API-key cash-balance endpoint.'),
+            description: _('Shows Antigravity model quota and AI credits. Free, Google AI Pro, and Ultra accounts require Antigravity; enterprise Gemini Code Assist remains supported.'),
         });
         group.add(this._switchRow(settings, 'google-enabled', _('Enabled')));
-        group.add(this._entryRow(settings, 'google-credentials-path', _('OAuth credentials path')));
+        group.add(this._entryRow(settings, 'google-credentials-path', _('Legacy Gemini CLI credentials path')));
         group.add(this._entryRow(settings, 'google-access-token-env', _('OAuth access-token env var')));
         group.add(this._entryRow(settings, 'google-project-id', _('Code Assist project ID (empty = discover)')));
         group.add(this._testProviderRow(settings, 'google'));

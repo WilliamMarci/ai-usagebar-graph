@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2026-11-26
+
+### Changed
+
+- Google personal, free, AI Pro, and Ultra support now follows Google's June
+  2026 migration from Gemini CLI to Antigravity CLI. Authentication prefers
+  Antigravity's system-keyring token and quota queries prefer the new grouped
+  quota-summary endpoint.
+- Legacy Gemini CLI credentials and quota calls remain as compatibility
+  fallbacks for Code Assist Standard and Enterprise users.
+
+### Fixed
+
+- Five-hour and weekly Antigravity quota buckets are selected by their actual
+  window duration instead of assuming that Pro and Flash are the two windows.
+
 ## [1.9.0] - 2026-11-26
 
 ### Added

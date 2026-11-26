@@ -29,7 +29,7 @@ describe('Google Code Assist quota fetch', () => {
         const result = runSync(fetchSnapshot({cache: cache(), http, accessToken: 'token', projectId: 'my-project'}));
         assertEqual(result.ok, true);
         assertEqual(calls.length, 1);
-        assertEqual(calls[0].url, `${CODE_ASSIST_ENDPOINT}/v1internal:retrieveUserQuota`);
+        assertEqual(calls[0].url, `${CODE_ASSIST_ENDPOINT}/v1internal:retrieveUserQuotaSummary`);
         assertEqual(calls[0].headers.Authorization, 'Bearer token');
         assertEqual(JSON.parse(calls[0].body).project, 'my-project');
     });

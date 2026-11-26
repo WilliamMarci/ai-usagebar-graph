@@ -330,8 +330,8 @@
 
     <key name="google-credentials-path" type="s">
       <default>''</default>
-      <summary>Gemini CLI OAuth credentials path</summary>
-      <description>Empty uses ~/.gemini/oauth_creds.json.</description>
+      <summary>Legacy Gemini CLI OAuth credentials path</summary>
+      <description>Compatibility fallback only. Antigravity credentials are normally read from the system keyring.</description>
     </key>
 
     <key name="google-access-token-env" type="s">

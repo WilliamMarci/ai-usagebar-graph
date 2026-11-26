@@ -54,13 +54,14 @@ Settings exports are plain JSON and may contain inline API keys. Treat exported 
 
 OpenCode Go quota is queried directly from the official authenticated `GET /zen/go/v1/usage` JSON endpoint. OpenCode Zen is a separate pay-as-you-go product; OpenCode currently provides no API-key endpoint for its credit balance, so the extension reports that limitation instead of showing Go quota data under the Zen name.
 
-Google support queries the same Code Assist quota service used by the official
-open-source Gemini CLI. It shows model request quota and, when Google supplies
-it, an unconverted **AI credits** value. Google AI Studio API keys do not expose
-a public cash-balance endpoint; AI Studio usage remains available in its web
-dashboard. Authenticate with Gemini CLI or provide an OAuth access token via
-the configured environment variable. The underlying Code Assist endpoint is
-not a stable public billing API and may change with Gemini CLI releases.
+Google support follows the current Antigravity CLI quota model. For personal
+free, Google AI Pro, and Ultra accounts, sign in with Antigravity CLI; the
+extension reads its token from the system keyring and queries grouped five-hour
+and weekly quota. Gemini Code Assist Standard and Enterprise accounts retain a
+legacy Gemini CLI compatibility path. When Google supplies it, the popup also
+shows the unconverted **AI credits** value. Google AI Studio API keys still do
+not expose a public cash-balance endpoint. An explicit OAuth access-token
+environment variable is available for headless setups.
 
 ## Privacy and network behavior
 
@@ -85,4 +86,5 @@ Issues and pull requests are welcome. Keep changes focused, preserve the compact
 
 - [`akitaonrails/ai-usagebar`](https://github.com/akitaonrails/ai-usagebar) — original project and foundation
 - [`junhoyeo/tokscale`](https://github.com/junhoyeo/tokscale) — reference for OpenCode usage discovery
-- [`google-gemini/gemini-cli`](https://github.com/google-gemini/gemini-cli) — reference implementation for Google Code Assist quota retrieval
+- [`google-antigravity/antigravity-cli`](https://github.com/google-antigravity/antigravity-cli) — current Google CLI and quota workflow
+- [`google-gemini/gemini-cli`](https://github.com/google-gemini/gemini-cli) — legacy enterprise compatibility reference
